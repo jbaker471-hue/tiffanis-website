@@ -1,0 +1,36 @@
+================================================================
+NETLIFY ENVIRONMENT VARIABLES
+Add ALL of these in Netlify → Site Settings → Environment Variables
+================================================================
+
+Variable Name                   Where to find the value
+------------------------------  --------------------------------
+VITE_SUPABASE_URL               Supabase → Settings → API → Project URL
+VITE_SUPABASE_ANON_KEY          Supabase → Settings → API → anon public key
+
+VITE_STRIPE_PUBLISHABLE_KEY     Stripe → Developers → API Keys → Publishable key
+STRIPE_SECRET_KEY               Stripe → Developers → API Keys → Secret key (mark Secret)
+STRIPE_WEBHOOK_SECRET           Stripe → Developers → Webhooks → endpoint → Signing secret (mark Secret)
+
+── EMAIL NOTIFICATIONS (add when ready) ─────────────────────
+RESEND_API_KEY                  resend.com → API Keys → Create API Key (mark Secret)
+NOTIFY_EMAIL                    The email address to receive order notifications
+
+================================================================
+After adding variables: Deploys → Trigger deploy → Deploy site
+================================================================
+
+TO ACTIVATE EMAIL NOTIFICATIONS:
+1. Go to resend.com and create a free account
+2. Click API Keys → Create API Key → copy it
+3. Add RESEND_API_KEY to Netlify environment variables
+4. Add NOTIFY_EMAIL with Tiffani's email address
+5. Redeploy — done! Every paid order triggers a notification email.
+
+SWITCHING TO LIVE STRIPE:
+1. In Stripe click Switch to live mode (top right)
+2. Get new pk_live_ and sk_live_ keys
+3. Update VITE_STRIPE_PUBLISHABLE_KEY and STRIPE_SECRET_KEY in Netlify
+4. Create new webhook endpoint for live mode with same URL
+5. Update STRIPE_WEBHOOK_SECRET with new whsec_ value
+6. Redeploy

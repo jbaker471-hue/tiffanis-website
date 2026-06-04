@@ -1,0 +1,69 @@
+# To A "T" Boutique — Deployment Guide
+
+## Step 1 — Create Supabase Project (5 min)
+
+1. Go to https://supabase.com and sign up free
+2. Click "New Project"
+3. Name it: toat-boutique
+4. Set a database password (save it somewhere)
+5. Choose region: US East (closest to Alabama)
+6. Wait ~2 minutes for it to provision
+
+## Step 2 — Set Up the Database (2 min)
+
+1. In your Supabase project, click "SQL Editor" in the left sidebar
+2. Click "New Query"
+3. Open the file `supabase-setup.sql` from this folder
+4. Copy ALL of it and paste into the SQL editor
+5. Click "Run" — you should see "Success"
+
+## Step 3 — Get Your API Keys (1 min)
+
+1. In Supabase, go to Settings → API
+2. Copy "Project URL" — looks like https://abcdefgh.supabase.co
+3. Copy "anon public" key — long string starting with eyJ...
+
+## Step 4 — Deploy to Netlify (5 min)
+
+1. Go to https://netlify.com and sign up free
+2. Click "Add new site" → "Deploy manually"
+3. You need to build first — open Terminal on your computer:
+
+   cd tatb-site
+   npm install
+   npm run build
+
+4. Drag the "dist" folder onto the Netlify deploy dropzone
+5. Your site is live! Copy the URL Netlify gives you.
+
+## Step 5 — Add Environment Variables to Netlify (2 min)
+
+1. In Netlify, go to Site Settings → Environment Variables
+2. Add variable: VITE_SUPABASE_URL = (your Project URL from Step 3)
+3. Add variable: VITE_SUPABASE_ANON_KEY = (your anon key from Step 3)
+4. Go to Deploys → "Trigger deploy" → "Deploy site"
+5. Wait ~1 minute — done!
+
+## Step 6 — Test It
+
+1. Open your Netlify URL
+2. Place a test order with your phone number
+3. Open the Admin panel (password: leo080693)
+4. Check the Orders tab — your order should be there
+5. Open the site on a different device — order still there ✓
+
+## That's it! Your site is live and fully functional.
+
+## Future Updates
+
+When you make changes to the code:
+1. Run `npm run build` in the tatb-site folder
+2. Drag the new `dist` folder to Netlify
+   OR connect GitHub for automatic deploys
+
+## Admin Password
+leo080693
+
+## Support
+- Supabase docs: https://supabase.com/docs
+- Netlify docs: https://docs.netlify.com
