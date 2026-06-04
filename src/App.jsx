@@ -127,9 +127,7 @@ const DEFAULT_CATS = [
     {id:"g4",name:"Real Estate",emoji:"🏠",preview:"HOME\nSWEET\nHOME",style:"chunky"},
   ]},
   {id:"custom",name:"Custom Design",emoji:"📤",designs:[
-    {id:"u1",name:"Upload My Image",emoji:"🖼️",preview:"",style:"upload",isUpload:true},
-    {id:"u2",name:"Screenshot / Inspo",emoji:"📸",preview:"",style:"upload",isUpload:true},
-    {id:"u3",name:"Logo or Artwork",emoji:"🎨",preview:"",style:"upload",isUpload:true},
+    {id:"u1",name:"Upload My Design",emoji:"📤",preview:"",style:"upload",isUpload:true},
   ]},
   {id:"dtf",name:"DTF Sheets",emoji:"🖨️",isDTF:true,designs:[
     {id:"d1",name:"4\u2033 × 4\u2033",emoji:"🔲",price:5,desc:"Small logo or icon"},
@@ -285,10 +283,10 @@ function ShirtSVG({color=SHIRT_COLORS[0], design, uploadImg, shirtStyle="no-pock
   const b2= parseInt(hex.slice(5,7),16)/255;
 
   const isPocket = shirtStyle === "pocket";
-  const cLeft  = isPocket ? size * 0.12 : size * 0.20;
-  const cTop   = isPocket ? imgH * 0.18  : imgH * 0.22;
-  const cW     = isPocket ? size * 0.30  : size * 0.60;
-  const cH     = isPocket ? imgH * 0.16  : imgH * 0.30;
+  const cLeft  = isPocket ? size * 0.10 : size * 0.18;
+  const cTop   = isPocket ? imgH * 0.14  : imgH * 0.18;
+  const cW     = isPocket ? size * 0.32  : size * 0.64;
+  const cH     = isPocket ? imgH * 0.18  : imgH * 0.36;
 
   const maxLen = Math.max(...lines.map(l=>l.length), 1);
   const fSize  = Math.max(7, Math.min(isPocket?11:20, cW / maxLen * (isPocket?1.2:1.5)));
@@ -1047,7 +1045,7 @@ function Storefront({cats, addOrder, customers, show}) {
     if(!cust.name.trim()){show("Please enter your name","err");return;}
     if(!cust.phone.replace(/\D/g,"")){show("Please enter your phone number","err");return;}
     if(items.some(i=>!i.size)){show("Please select a size for each item","err");return;}
-    if(placement.length===0 && !cat?.isDTF){show("Please select at least one print placement","err");return;}
+
     if(design?.isUpload && !uploadImg){show("Please upload your design image","err");return;}
     if(delivery==="Ship" && !shippingAddr.line1.trim()){show("Please enter your shipping address","err");return;}
     if(delivery==="Ship" && !shippingAddr.zip.trim()){show("Please enter your zip code","err");return;}
@@ -1327,39 +1325,6 @@ function Storefront({cats, addOrder, customers, show}) {
                   </div>
                 ))}
                 <button onClick={()=>setItems([...items,{size:"",qty:1}])} style={{marginTop:8,fontSize:12,color:B.green,background:"none",border:`2px dashed ${B.amber}`,borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>+ Add Size</button>
-              </div>
-              {/* Placement */}
-              <div style={{marginBottom:22}}>
-                <Lbl>Print Placement <span style={{color:B.textLt,fontWeight:400}}>(select all that apply)</span></Lbl>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:6}}>
-                  {[
-                    {id:"front_full",    label:"Front Full",     icon:"👕", desc:"Center chest, full front"},
-                    {id:"front_pocket",  label:"Front Pocket",   icon:"🔲", desc:"Left chest pocket area"},
-                    {id:"back_full",     label:"Back Full",      icon:"🔄", desc:"Full back print"},
-                    {id:"back_top",      label:"Back Top/Yoke",  icon:"⬆️", desc:"Upper back / shoulder"},
-                    {id:"sleeve",        label:"Sleeve",         icon:"💪", desc:"Left or right sleeve"},
-                    {id:"other",         label:"Other / Ask Me", icon:"💬", desc:"Describe in notes"},
-                  ].map(p=>{
-                    const sel = placement.includes(p.id);
-                    return (
-                      <button key={p.id} onClick={()=>setPlacement(prev=>sel?prev.filter(x=>x!==p.id):[...prev,p.id])} style={{
-                        display:"flex", alignItems:"center", gap:8, padding:"10px 12px",
-                        borderRadius:10, border:"2px solid", textAlign:"left",
-                        borderColor: sel ? B.green : "#ddd",
-                        background: sel ? B.greenPale : "#fff",
-                        cursor:"pointer", transition:"all .15s",
-                      }}>
-                        <span style={{fontSize:20,flexShrink:0}}>{p.icon}</span>
-                        <div>
-                          <div style={{fontSize:12,fontWeight:700,color:sel?B.green:B.text,fontFamily:"'Trebuchet MS',sans-serif"}}>{p.label}</div>
-                          <div style={{fontSize:10,color:B.textLt,fontFamily:"'Trebuchet MS',sans-serif"}}>{p.desc}</div>
-                        </div>
-                        {sel && <span style={{marginLeft:"auto",color:B.green,fontSize:14,flexShrink:0}}>✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-                {placement.length===0 && <div style={{fontSize:11,color:B.amber,marginTop:6,fontFamily:"'Trebuchet MS',sans-serif"}}>⚠️ Please select at least one placement</div>}
               </div>
               {/* Delivery */}
               <div style={{marginBottom:22}}>
