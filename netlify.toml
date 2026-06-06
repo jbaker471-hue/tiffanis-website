@@ -10,3 +10,7 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# Sync Google Drive designs into Supabase every 10 minutes
+[functions."sync-designs"]
+  schedule = "*/10 * * * *"
