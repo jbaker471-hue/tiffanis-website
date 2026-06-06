@@ -1103,6 +1103,7 @@ function Storefront({cats, addOrder, customers, show}) {
   const [cust,setCust]           = useState({name:"",phone:"",notes:""});
   const [loyRec,setLoyRec]       = useState(null);
   const [useReward,setUseReward] = useState(false);
+  const [cart,setCart]           = useState([]); // array of configured design lines
   const fileRef                  = useRef();
 
   // When age group changes, default to the first product in that group
@@ -1113,8 +1114,41 @@ function Storefront({cats, addOrder, customers, show}) {
     setColor(getBrandColors(first)[0]);
   };
 
-  const reset = () => { setStep(1);setCat(null);setDesign(null);setUploadImg(null);setItems([{size:"",qty:1}]);setPlacement([]);setAgeId("adult");setProductId(DEFAULT_PRODUCT_ID);setColor(getBrandColors(DEFAULT_PRODUCT_ID)[0]);setShirtStyle("no-pocket");setDelivery("Pickup");setCust({name:"",phone:"",notes:""});setLoyRec(null);setUseReward(false); };
+  // Reset only the current design configuration (keeps cart + customer info)
+  const resetDesign = () => { setCat(null);setDesign(null);setUploadImg(null);setItems([{size:"",qty:1}]);setPlacement([]);setAgeId("adult");setProductId(DEFAULT_PRODUCT_ID);setColor(getBrandColors(DEFAULT_PRODUCT_ID)[0]);setShirtStyle("no-pocket"); };
+
+  // Full reset — clears everything including the cart (after a completed order)
+  const reset = () => { setStep(1);setCart([]);setDelivery("Pickup");setCust({name:"",phone:"",notes:""});setLoyRec(null);setUseReward(false);resetDesign(); };
+
   const totalQty = items.reduce((s,i)=>s+Number(i.qty||0),0);
+
+  // Validate the current design, package it as a cart line, and add it.
+  const addToCart = (goToCart) => {
+    if(!design){show("Please pick a design first","err");return;}
+    if(design?.isUpload && !uploadImg){show("Please upload your design image","err");return;}
+    if(items.some(i=>!i.size)){show("Please select a size for each item","err");return;}
+    if(placement.length===0){show("Please select at least one print placement","err");return;}
+    const line = {
+      id: Date.now()+"-"+Math.random().toString(36).slice(2,7),
+      designName: design?.isUpload ? "Custom Upload" : design?.name,
+      isUpload: !!design?.isUpload,
+      uploadImg: uploadImg || null,
+      productId, productName: product.name,
+      colorName: color.name, colorHex: color.hex,
+      shirtStyle,
+      placement: [...placement],
+      items: items.filter(i=>i.size).map(i=>({size:i.size, qty:Number(i.qty)||1})),
+    };
+    setCart(prev=>[...prev, line]);
+    show("Added to cart! 🛒","ok");
+    if (goToCart) { setStep(5); } else { resetDesign(); setStep(1); }
+  };
+
+  const removeCartLine = (id) => setCart(prev=>prev.filter(l=>l.id!==id));
+
+  const lineTotal = (line) => line.items.reduce((s,i)=>s + getPrice(line.productId,i.size)*i.qty, 0);
+  const cartTotal = cart.reduce((s,l)=>s+lineTotal(l),0);
+  const cartQty   = cart.reduce((s,l)=>s+l.items.reduce((a,i)=>a+i.qty,0),0);
 
   const onPhoneBlur = () => {
     if (cust.phone.replace(/\D/g,"").length>=10) setLoyRec(findCustomer(customers,cust.phone));
@@ -1129,25 +1163,32 @@ function Storefront({cats, addOrder, customers, show}) {
   const [paying,setPaying]       = useState(false);
   const [shippingAddr,setShippingAddr] = useState({line1:"",city:"",state:"",zip:""});
 
-  const shirtTotal = calcTotal(productId, items.filter(i=>i.size));
+  const shirtTotal = cart.reduce((s,l)=>s+l.items.reduce((a,i)=>a+getPrice(l.productId,i.size)*i.qty,0),0);
   const shipCost   = delivery==="Ship" ? 8 : 0;
   const grandTotal = shirtTotal + shipCost;
 
   const submit = async () => {
+    if(cart.length===0){show("Your cart is empty","err");return;}
     if(!cust.name.trim()){show("Please enter your name","err");return;}
     if(!cust.phone.replace(/\D/g,"")){show("Please enter your phone number","err");return;}
-    if(items.some(i=>!i.size)){show("Please select a size for each item","err");return;}
-    if(placement.length===0){show("Please select at least one print placement","err");return;}
-    if(design?.isUpload && !uploadImg){show("Please upload your design image","err");return;}
     if(delivery==="Ship" && !shippingAddr.line1.trim()){show("Please enter your shipping address","err");return;}
     if(delivery==="Ship" && !shippingAddr.zip.trim()){show("Please enter your zip code","err");return;}
 
-    const orderItems = items.map(i=>({
-      design:design?.isUpload?"Custom Upload":design?.name,
-      color:color.name, size:i.size, qty:i.qty,
-      hasUpload:!!uploadImg, placement:placement.join(", "),
-      shirt_style:shirtStyle, brand:product.name, price:getPrice(productId,i.size)
-    }));
+    // Flatten every cart line's sizes into individual order items,
+    // each carrying that line's own design/placement/style/brand.
+    const orderItems = cart.flatMap(line =>
+      line.items.map(i=>({
+        design: line.designName,
+        color: line.colorName,
+        size: i.size,
+        qty: i.qty,
+        hasUpload: line.isUpload,
+        placement: line.placement.join(", "),
+        shirt_style: line.shirtStyle,
+        brand: line.productName,
+        price: getPrice(line.productId, i.size),
+      }))
+    );
 
     const shippingFull = delivery==="Ship"
       ? `${shippingAddr.line1}, ${shippingAddr.city}, ${shippingAddr.state} ${shippingAddr.zip}`
@@ -1167,9 +1208,7 @@ function Storefront({cats, addOrder, customers, show}) {
             phone: cust.phone,
             notes: (useReward?`[REWARD: ${rewardCode(cust.phone)}] `:"")+cust.notes,
             usingReward: useReward,
-            brand: product.name,
-            shirt_style: shirtStyle,
-            placement: placement.join(", "),
+            placement: cart.map(l=>l.placement.join(", ")).join(" | "),
           }
         })
       });
@@ -1185,17 +1224,27 @@ function Storefront({cats, addOrder, customers, show}) {
     }
   };
 
-  const STEPS = ["Category","Design","Customize","Your Info","Done!"];
+  const STEPS = ["Design","Customize","Cart","Your Info","Done!"];
+  // Map internal step numbers (1,2,3,5,6,7) to progress index
+  const progressIndex = step===1?1 : step===2?1 : step===3?2 : step===5?3 : step===6?4 : 5;
 
   return (
     <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 16px"}}>
+      {/* Cart bar — visible whenever there are items, except on Done */}
+      {cart.length>0 && step!==7 && step!==5 && (
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
+          <button onClick={()=>setStep(5)} style={{display:"flex",alignItems:"center",gap:8,background:B.green,color:"#fff",border:"none",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:700,fontSize:13,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
+            🛒 Cart ({cartQty}) · ${cartTotal}
+          </button>
+        </div>
+      )}
       {step<5 && (
         <div style={{marginBottom:24}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-            {STEPS.map((l,i)=><div key={i} style={{fontSize:10,color:i+1<=step?B.green:"#bbb",fontWeight:i+1===step?700:400,letterSpacing:1,textTransform:"uppercase"}}>{l}</div>)}
+            {STEPS.map((l,i)=><div key={i} style={{fontSize:10,color:i+1<=progressIndex?B.green:"#bbb",fontWeight:i+1===progressIndex?700:400,letterSpacing:1,textTransform:"uppercase"}}>{l}</div>)}
           </div>
           <div style={{height:4,background:B.creamDk,borderRadius:2}}>
-            <div style={{height:"100%",background:`linear-gradient(90deg,${B.greenDk},${B.amber})`,borderRadius:2,width:`${((step-1)/4)*100}%`,transition:"width .4s ease"}}/>
+            <div style={{height:"100%",background:`linear-gradient(90deg,${B.greenDk},${B.amber})`,borderRadius:2,width:`${((progressIndex-1)/4)*100}%`,transition:"width .4s ease"}}/>
           </div>
         </div>
       )}
@@ -1409,17 +1458,6 @@ function Storefront({cats, addOrder, customers, show}) {
                 </div>
                 {placement.length===0 && <div style={{fontSize:11,color:B.amber,marginTop:6,fontFamily:"'Trebuchet MS',sans-serif"}}>⚠️ Please select at least one placement</div>}
               </div>
-              {/* Delivery */}
-              <div style={{marginBottom:22}}>
-                <Lbl>Delivery</Lbl>
-                <div style={{display:"flex",gap:10,marginTop:6}}>
-                  {["Pickup","Ship"].map(d=>(
-                    <button key={d} onClick={()=>setDelivery(d)} style={{flex:1,padding:"10px",borderRadius:10,border:"2px solid",borderColor:delivery===d?B.green:"#ddd",background:delivery===d?B.green:"#fff",color:delivery===d?"#fff":"#888",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:600,cursor:"pointer",fontSize:13}}>
-                      {d==="Pickup"?"🏪 Pickup":"📦 Ship"}
-                    </button>
-                  ))}
-                </div>
-              </div>
               {/* Price total */}
               {items.some(i=>i.size) && (
                 <div style={{background:B.greenPale,borderRadius:12,padding:"12px 14px",marginBottom:14,border:`1.5px solid ${B.greenLt}`}}>
@@ -1441,28 +1479,80 @@ function Storefront({cats, addOrder, customers, show}) {
                   </div>
                 </div>
               )}
-              <button onClick={()=>setStep(4)} style={PBTN}>Next: Your Info →</button>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <button onClick={()=>addToCart(false)} style={{...PBTN,background:"#fff",color:B.green,border:`2px solid ${B.green}`}}>🛒 Add to Cart & Keep Shopping</button>
+                <button onClick={()=>addToCart(true)} style={PBTN}>Add to Cart & Checkout →</button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* STEP 4 — Info */}
-      {step===4 && (
+      {/* STEP 5 — Cart */}
+      {step===5 && (
+        <div style={{animation:"fup .4s ease",maxWidth:680,margin:"0 auto"}}>
+          <button onClick={()=>{resetDesign();setStep(1);}} style={BBTN}>← Add Another Design</button>
+          <h2 style={{fontSize:26,color:B.text,marginBottom:6,fontFamily:"'Dancing Script','Georgia',cursive"}}>Your Cart</h2>
+          {cart.length===0 ? (
+            <div style={{textAlign:"center",padding:"40px 20px",color:B.textLt}}>
+              <div style={{fontSize:48,marginBottom:12}}>🛒</div>
+              <p style={{fontSize:14,marginBottom:20}}>Your cart is empty.</p>
+              <button onClick={()=>{resetDesign();setStep(1);}} style={{...PBTN,maxWidth:240,margin:"0 auto"}}>Browse Designs</button>
+            </div>
+          ) : (
+            <>
+              <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:18}}>
+                {cart.map(line=>(
+                  <div key={line.id} style={{background:"#fff",borderRadius:14,padding:"14px",boxShadow:"0 2px 12px rgba(0,0,0,0.07)",display:"flex",gap:12,alignItems:"flex-start"}}>
+                    <div style={{flexShrink:0}}>
+                      <ShirtSVG color={{name:line.colorName,hex:line.colorHex}} design={line.isUpload?{isUpload:true}:{name:line.designName,style:"bold"}} uploadImg={line.uploadImg} shirtStyle={line.shirtStyle} size={72}/>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,color:B.text,fontSize:14}}>{line.designName}</div>
+                      <div style={{color:B.textLt,fontSize:12,marginTop:2}}>{line.productName} · {line.colorName}{line.shirtStyle==="pocket"?" · Pocket":""}</div>
+                      <div style={{color:B.green,fontSize:12,marginTop:2,fontWeight:600}}>{line.items.map(i=>`${i.size}×${i.qty}`).join(", ")}</div>
+                      {line.placement.length>0 && <div style={{fontSize:11,color:B.textLt,marginTop:2}}>📍 {line.placement.map(p=>p.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())).join(", ")}</div>}
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:15,fontWeight:700,color:B.green}}>${lineTotal(line)}</div>
+                      <button onClick={()=>removeCartLine(line.id)} style={{marginTop:6,fontSize:11,color:"#C0392B",background:"none",border:"none",cursor:"pointer",padding:0}}>✕ Remove</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{background:B.greenPale,borderRadius:12,padding:"14px 16px",marginBottom:16,border:`1.5px solid ${B.greenLt}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:14,fontWeight:700,color:B.green,fontFamily:"'Trebuchet MS',sans-serif"}}>{cartQty} shirt{cartQty!==1?"s":""} total</span>
+                <span style={{fontSize:22,fontWeight:700,color:B.green,fontFamily:"'Trebuchet MS',sans-serif"}}>${cartTotal}</span>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <button onClick={()=>{resetDesign();setStep(1);}} style={{...PBTN,background:"#fff",color:B.green,border:`2px solid ${B.green}`}}>+ Add Another Design</button>
+                <button onClick={()=>setStep(6)} style={PBTN}>Next: Your Info →</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* STEP 6 — Info */}
+      {step===6 && (
         <div style={{animation:"fup .4s ease",maxWidth:620,margin:"0 auto"}}>
-          <button onClick={()=>setStep(3)} style={BBTN}>← Back</button>
+          <button onClick={()=>setStep(5)} style={BBTN}>← Back to Cart</button>
           <h2 style={{fontSize:26,color:B.text,marginBottom:6,fontFamily:"'Dancing Script','Georgia',cursive"}}>Almost There!</h2>
           <p style={{color:B.textLt,marginBottom:18,fontSize:14}}>Your phone number tracks your loyalty rewards 🌟</p>
-          {/* Summary */}
-          <div style={{background:"#fff",borderRadius:14,padding:"14px",marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,0.07)",display:"flex",gap:12,alignItems:"center"}}>
-            <ShirtSVG color={color} design={design} uploadImg={uploadImg} shirtStyle={shirtStyle} size={72}/>
-            <div>
-              <div style={{fontWeight:700,color:B.text,fontSize:14}}>{design?.name}</div>
-              <div style={{color:B.textLt,fontSize:12,marginTop:2}}>{color.name} · {delivery}</div>
-              <div style={{color:B.green,fontSize:12,marginTop:2,fontWeight:600}}>{totalQty} shirt{totalQty!==1?"s":""}: {(items||[]).map(i=>`${i.size}×${i.qty}`).join(", ")}</div>
-              <div style={{fontSize:12,color:B.textMid,marginTop:2}}>{product.name} · {shirtStyle==="pocket"?"With Pocket":"No Pocket"}</div>
-              {placement.length>0 && <div style={{fontSize:11,color:B.textLt,marginTop:2}}>📍 {placement.map(p=>p.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())).join(", ")}</div>}
-              <div style={{fontSize:14,fontWeight:700,color:B.green,marginTop:4}}>Est. Total: ${calcTotal(productId, items.filter(i=>i.size))}{delivery==="Ship"?" + $8 ship":""}</div>
+          {/* Cart summary */}
+          <div style={{background:"#fff",borderRadius:14,padding:"14px",marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,0.07)"}}>
+            <div style={{fontSize:12,fontWeight:700,color:B.textMid,marginBottom:10,fontFamily:"'Trebuchet MS',sans-serif"}}>{cartQty} shirt{cartQty!==1?"s":""} · {cart.length} design{cart.length!==1?"s":""}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {cart.map(line=>(
+                <div key={line.id} style={{display:"flex",gap:10,alignItems:"center"}}>
+                  <ShirtSVG color={{name:line.colorName,hex:line.colorHex}} design={line.isUpload?{isUpload:true}:{name:line.designName,style:"bold"}} uploadImg={line.uploadImg} shirtStyle={line.shirtStyle} size={48}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:700,color:B.text}}>{line.designName}</div>
+                    <div style={{fontSize:11,color:B.textLt}}>{line.productName} · {line.colorName} · {line.items.map(i=>`${i.size}×${i.qty}`).join(", ")}</div>
+                  </div>
+                  <div style={{fontSize:13,fontWeight:700,color:B.green}}>${lineTotal(line)}</div>
+                </div>
+              ))}
             </div>
           </div>
           {loyRec && <LoyaltyBar rec={loyRec}/>}
@@ -1471,6 +1561,17 @@ function Storefront({cats, addOrder, customers, show}) {
             <div>
               <Lbl>Phone Number * <span style={{color:B.green,fontWeight:600}}>(tracks loyalty rewards)</span></Lbl>
               <input style={INP()} value={cust.phone} onChange={e=>setCust({...cust,phone:e.target.value})} onBlur={onPhoneBlur} placeholder="(555) 555-5555" type="tel"/>
+            </div>
+            {/* Delivery — order level */}
+            <div>
+              <Lbl>Delivery</Lbl>
+              <div style={{display:"flex",gap:10,marginTop:2}}>
+                {["Pickup","Ship"].map(d=>(
+                  <button key={d} onClick={()=>setDelivery(d)} style={{flex:1,padding:"10px",borderRadius:10,border:"2px solid",borderColor:delivery===d?B.green:"#ddd",background:delivery===d?B.green:"#fff",color:delivery===d?"#fff":"#888",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:600,cursor:"pointer",fontSize:13}}>
+                    {d==="Pickup"?"🏪 Pickup":"📦 Ship (+$8)"}
+                  </button>
+                ))}
+              </div>
             </div>
             {/* Reward toggle */}
             {loyRec && (loyRec.earned_rewards||0)-(loyRec.redeemed_rewards||0)>0 && (
@@ -1504,7 +1605,7 @@ function Storefront({cats, addOrder, customers, show}) {
             <div style={{background:`linear-gradient(135deg,${B.greenDk},${B.green})`,borderRadius:14,padding:"16px 18px",color:"#fff"}}>
               <div style={{fontSize:13,opacity:.85,marginBottom:8}}>Order Summary</div>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-                <span>{totalQty} shirt{totalQty!==1?"s":""} ({product.name})</span>
+                <span>{cartQty} shirt{cartQty!==1?"s":""} · {cart.length} design{cart.length!==1?"s":""}</span>
                 <span>${shirtTotal}</span>
               </div>
               {delivery==="Ship" && (
@@ -1536,8 +1637,8 @@ function Storefront({cats, addOrder, customers, show}) {
         </div>
       )}
 
-      {/* STEP 5 — Done */}
-      {step===5 && (
+      {/* STEP 7 — Done */}
+      {step===7 && (
         <div style={{textAlign:"center",padding:"60px 20px",animation:"fup .5s ease"}}>
           <div style={{fontSize:60,marginBottom:14}}>🎉</div>
           <h2 style={{fontSize:30,color:B.text,marginBottom:8,fontFamily:"'Dancing Script','Georgia',cursive"}}>Order Submitted!</h2>
