@@ -52,39 +52,119 @@ const BRAND_COLORS = {
 // Default to comfort colors palette for backward compat
 const SHIRT_COLORS = BRAND_COLORS.comfort;
 
-// Get colors for a specific brand
-function getBrandColors(brandId) {
-  return BRAND_COLORS[brandId] || BRAND_COLORS.comfort;
+// Size sets
+const ADULT_SIZES = ["XS","S","M","L","XL","2XL","3XL","4XL","5XL"];
+const YOUTH_SIZES = ["YXS","YS","YM","YL","YXL"];
+const BIG_SIZES   = ["2XL","3XL","4XL","5XL"]; // adult upcharge sizes
+const SIZES = [...YOUTH_SIZES, ...ADULT_SIZES];
+
+// ─── PRODUCT CATALOG: Age group → Brand → Style ────────────────────────────────
+// Each "style" is a sellable product. id is globally unique so the rest of the
+// app (orders, pricing, colors) can reference a single flat key.
+const CATALOG = {
+  adult: {
+    label: "Adult",
+    sizes: ADULT_SIZES,
+    brands: [
+      {
+        id:"gildan", name:"Gildan", colorKey:"gildan",
+        styles:[
+          { id:"gildan_ss",    label:"Short Sleeve", desc:"S–XL $17 · 2XL–5XL $20", basePrice:17, bigPrice:20 },
+          { id:"gildan_ls",    label:"Long Sleeve",  desc:"S–XL $20 · 2XL–5XL $25", basePrice:20, bigPrice:25 },
+          { id:"gildan_sweat", label:"Sweatshirt",   desc:"S–XL $25 · 2XL–5XL $30", basePrice:25, bigPrice:30 },
+          { id:"gildan_hoodie",label:"Hoodie",       desc:"S–XL $30 · 2XL–5XL $35", basePrice:30, bigPrice:35 },
+        ],
+      },
+      {
+        id:"bella", name:"Bella+Canvas", colorKey:"bella",
+        styles:[
+          { id:"bella_ss",     label:"Short Sleeve", desc:"Soft tri-blend, fitted · S–XL $20 · 2XL+ $25", basePrice:20, bigPrice:25 },
+        ],
+      },
+      {
+        id:"comfort", name:"Comfort Colors", colorKey:"comfort",
+        styles:[
+          { id:"comfort_ss",   label:"Short Sleeve", desc:"Pigment-dyed, vintage feel · S–XL $20 · 2XL+ $25", basePrice:20, bigPrice:25 },
+        ],
+      },
+    ],
+  },
+  child: {
+    label: "Children",
+    sizes: YOUTH_SIZES,
+    brands: [
+      {
+        id:"bella", name:"Bella+Canvas", colorKey:"bella",
+        styles:[ { id:"child_bella", label:"Youth Tee", desc:"Youth XS–XL · $13", basePrice:13, bigPrice:13 } ],
+      },
+      {
+        id:"rabbitskins", name:"Rabbit Skins", colorKey:"gildan",
+        styles:[ { id:"child_rabbit", label:"Youth Tee", desc:"Youth XS–XL · $13", basePrice:13, bigPrice:13 } ],
+      },
+      {
+        id:"gildan", name:"Gildan", colorKey:"gildan",
+        styles:[ { id:"child_gildan", label:"Youth Tee", desc:"Youth XS–XL · $13", basePrice:13, bigPrice:13 } ],
+      },
+      {
+        id:"comfort", name:"Comfort Colors", colorKey:"comfort",
+        styles:[ { id:"child_comfort", label:"Youth Tee", desc:"Youth XS–XL · $13", basePrice:13, bigPrice:13 } ],
+      },
+    ],
+  },
+};
+
+// DTF print-only stays as a standalone option
+const DTF_ONLY = { id:"dtf_only", label:"DTF Print Only", desc:"Flat rate per print up to 12×15″ — shirt not included", basePrice:10, bigPrice:10, colorKey:"comfort" };
+
+// Flatten every style into a lookup keyed by its unique style id.
+const PRODUCTS = (() => {
+  const map = {};
+  Object.entries(CATALOG).forEach(([ageId, age]) => {
+    age.brands.forEach(brand => {
+      brand.styles.forEach(style => {
+        map[style.id] = {
+          ...style,
+          ageId,
+          sizes: age.sizes,
+          brandId: brand.id,
+          brandName: brand.name,
+          colorKey: brand.colorKey,
+          // Combined display name e.g. "Gildan Short Sleeve"
+          name: `${brand.name} ${style.label}`,
+        };
+      });
+    });
+  });
+  map[DTF_ONLY.id] = { ...DTF_ONLY, ageId:"adult", sizes:ADULT_SIZES, brandId:"dtf", brandName:"DTF", name:DTF_ONLY.label };
+  return map;
+})();
+
+const DEFAULT_PRODUCT_ID = "comfort_ss";
+
+function getProduct(productId) {
+  return PRODUCTS[productId] || PRODUCTS[DEFAULT_PRODUCT_ID];
 }
-const SIZES = ["YXS","YS","YM","YL","XS","S","M","L","XL","2XL","3XL","4XL"];
-const BIG_SIZES = ["2XL","3XL","4XL"]; // upcharge sizes
 
-const SHIRT_BRANDS = [
-  {
-    id:"gildan", name:"Gildan",
-    desc:"Classic cotton, great for everyday wear",
-    basePrice:17, bigPrice:20,
-  },
-  {
-    id:"comfort", name:"Comfort Colors",
-    desc:"Soft, pigment-dyed, vintage feel",
-    basePrice:20, bigPrice:25,
-  },
-  {
-    id:"bella", name:"Bella+Canvas",
-    desc:"Soft tri-blend, fitted cut",
-    basePrice:20, bigPrice:25,
-  },
-];
-
-function getPrice(brandId, size) {
-  const brand = SHIRT_BRANDS.find(b=>b.id===brandId) || SHIRT_BRANDS[0];
-  return BIG_SIZES.includes(size) ? brand.bigPrice : brand.basePrice;
+// brandId here is a PRODUCT id (kept name for backward compat with callers)
+function getBrandColors(productId) {
+  const p = PRODUCTS[productId];
+  const key = p ? p.colorKey : productId; // tolerate raw palette keys
+  return BRAND_COLORS[key] || BRAND_COLORS.comfort;
 }
 
-function calcTotal(brandId, items) {
+function getSizesForBrand(productId) {
+  const p = getProduct(productId);
+  return p.sizes;
+}
+
+function getPrice(productId, size) {
+  const p = getProduct(productId);
+  return BIG_SIZES.includes(size) ? p.bigPrice : p.basePrice;
+}
+
+function calcTotal(productId, items) {
   return items.reduce((sum,i)=>{
-    const price = getPrice(brandId, i.size);
+    const price = getPrice(productId, i.size);
     return sum + (price * Number(i.qty||1));
   },0);
 }
@@ -127,20 +207,14 @@ const DEFAULT_CATS = [
     {id:"g4",name:"Real Estate",emoji:"🏠",preview:"HOME\nSWEET\nHOME",style:"chunky"},
   ]},
   {id:"custom",name:"Custom Design",emoji:"📤",designs:[
-    {id:"u1",name:"Upload My Design",emoji:"📤",preview:"",style:"upload",isUpload:true},
-  ]},
-  {id:"dtf",name:"DTF Sheets",emoji:"🖨️",isDTF:true,designs:[
-    {id:"d1",name:"4\u2033 × 4\u2033",emoji:"🔲",price:5,desc:"Small logo or icon"},
-    {id:"d2",name:"5\u2033 × 5\u2033",emoji:"🔳",price:5,desc:"Standard small design"},
-    {id:"d3",name:"8\u2033 × 10\u2033",emoji:"📄",price:5,desc:"Most popular size"},
-    {id:"d4",name:"11\u2033 × 14\u2033",emoji:"📋",price:5,desc:"Large design / gang sheet"},
-    {id:"d5",name:"11\u2033 × 17\u2033",emoji:"📰",price:5,desc:"Jumbo / full sheet"},
-    {id:"d6",name:"Custom Size",emoji:"📐",price:null,desc:"Ask Tiffani for quote"},
+    {id:"u1",name:"Upload My Image",emoji:"🖼️",preview:"",style:"upload",isUpload:true},
+    {id:"u2",name:"Screenshot / Inspo",emoji:"📸",preview:"",style:"upload",isUpload:true},
+    {id:"u3",name:"Logo or Artwork",emoji:"🎨",preview:"",style:"upload",isUpload:true},
   ]},
 ];
 
 const FAQ = [
-  {q:"What sizes do you carry?", a:"YXS through 4XL — youth and adult! If you need something specific just ask."},
+  {q:"What sizes do you carry?", a:"Youth XS through adult 5XL! If you need something specific just ask."},
   {q:"How much is shipping?",    a:"Flat $8 rate anywhere, or free pickup in New Market, AL!"},
   {q:"How do I pay?",            a:"Venmo, PayPal, Cash App, or cash at pickup. Payment is required upfront before production starts."},
   {q:"How long does it take?",   a:"Most orders are ready in 5–7 business days. She'll let you know if yours is more complex!"},
@@ -283,10 +357,11 @@ function ShirtSVG({color=SHIRT_COLORS[0], design, uploadImg, shirtStyle="no-pock
   const b2= parseInt(hex.slice(5,7),16)/255;
 
   const isPocket = shirtStyle === "pocket";
-  const cLeft  = isPocket ? size * 0.10 : size * 0.18;
-  const cTop   = isPocket ? imgH * 0.14  : imgH * 0.18;
-  const cW     = isPocket ? size * 0.32  : size * 0.64;
-  const cH     = isPocket ? imgH * 0.18  : imgH * 0.36;
+  // Pocket = upper RIGHT chest; Full = center chest
+  const cLeft  = isPocket ? size * 0.55 : size * 0.20;
+  const cTop   = isPocket ? imgH * 0.18  : imgH * 0.22;
+  const cW     = isPocket ? size * 0.28  : size * 0.60;
+  const cH     = isPocket ? imgH * 0.16  : imgH * 0.30;
 
   const maxLen = Math.max(...lines.map(l=>l.length), 1);
   const fSize  = Math.max(7, Math.min(isPocket?11:20, cW / maxLen * (isPocket?1.2:1.5)));
@@ -542,11 +617,15 @@ export default function App() {
       <div style={{maxWidth:1100,margin:"0 auto"}}>
         <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{background:"linear-gradient(160deg,#F2E8D4,#DDD0B0)",borderRadius:10,padding:"6px 14px",boxShadow:"0 3px 10px rgba(0,0,0,0.2)",border:`1px solid ${B.wood}`}}>
-              <div style={{fontFamily:"'Dancing Script','Georgia',cursive",fontSize:22,fontWeight:700,color:B.text,lineHeight:1.1}}>To A "T"</div>
-              <div style={{fontFamily:"'Dancing Script','Georgia',cursive",fontSize:16,fontWeight:700,color:B.textMid,lineHeight:1}}>Boutique</div>
+            <img
+              src="/logo.jpg"
+              alt="To A T Boutique"
+              style={{height:52,width:52,borderRadius:"50%",objectFit:"cover",boxShadow:"0 3px 10px rgba(0,0,0,0.25)",border:"2px solid rgba(255,255,255,0.4)"}}
+            />
+            <div>
+              <div style={{fontFamily:"'Dancing Script','Georgia',cursive",fontSize:20,fontWeight:700,color:"#fff",lineHeight:1.1,textShadow:"0 1px 3px rgba(0,0,0,0.3)"}}>To A "T"</div>
+              <div style={{fontFamily:"'Dancing Script','Georgia',cursive",fontSize:14,fontWeight:700,color:"rgba(255,255,255,0.85)",lineHeight:1}}>Boutique</div>
             </div>
-            <span style={{fontSize:22}}>🌵</span>
           </div>
           <div style={{fontSize:11,color:"rgba(255,255,255,0.85)",textAlign:"right",lineHeight:1.8}}>
             <div>📍 New Market, AL</div>
@@ -574,7 +653,7 @@ export default function App() {
       {/* ── VIEWS ── */}
       {loading && (
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"60vh",gap:16}}>
-          <div style={{fontSize:48}}>🌵</div>
+          <img src="/logo.jpg" alt="To A T Boutique" style={{width:80,height:80,borderRadius:"50%",objectFit:"cover",boxShadow:"0 4px 16px rgba(0,0,0,0.15)"}}/>
           <div style={{fontFamily:"'Dancing Script','Georgia',cursive",fontSize:22,color:B.green}}>Loading...</div>
           <div style={{fontSize:13,color:B.textLt}}>Connecting to the shop</div>
         </div>
@@ -665,7 +744,7 @@ function MessengerBubble() {
           <div style={{background:"linear-gradient(135deg,#0084FF,#0052CC)", padding:"16px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:40,height:40,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🌵</div>
+                <img src="/logo.jpg" alt="logo" style={{width:40,height:40,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,0.4)"}}/>
                 <div>
                   <div style={{color:"#fff",fontWeight:700,fontSize:14,fontFamily:"'Trebuchet MS',sans-serif"}}>To A "T" Boutique</div>
                   <div style={{color:"rgba(255,255,255,0.8)",fontSize:11,fontFamily:"'Trebuchet MS',sans-serif"}}>Typically replies within a few hours</div>
@@ -754,9 +833,12 @@ function Welcome({setView, customers, orders, show}) {
 
       {/* Hero */}
       <div style={{background:`linear-gradient(160deg,${B.greenDk},${B.green})`, borderRadius:20, padding:"32px 20px", textAlign:"center", marginBottom:20, boxShadow:`0 8px 32px rgba(46,92,62,0.3)`}}>
-        <div style={{background:"linear-gradient(160deg,#F2E8D4,#DDD0B0)", borderRadius:14, padding:"10px 22px", display:"inline-block", marginBottom:14, boxShadow:"0 3px 12px rgba(0,0,0,0.2)", border:`1px solid ${B.wood}`}}>
-          <div style={{fontFamily:"'Dancing Script','Georgia',cursive", fontSize:38, fontWeight:700, color:B.text, lineHeight:1.1}}>To A "T"</div>
-          <div style={{fontFamily:"'Dancing Script','Georgia',cursive", fontSize:24, fontWeight:700, color:B.textMid, lineHeight:1}}>Boutique</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:14,marginBottom:14}}>
+          <img src="/logo.jpg" alt="To A T Boutique" style={{width:90,height:90,borderRadius:"50%",objectFit:"cover",boxShadow:"0 4px 18px rgba(0,0,0,0.3)",border:"3px solid rgba(255,255,255,0.5)"}}/>
+          <div style={{textAlign:"left"}}>
+            <div style={{fontFamily:"'Dancing Script','Georgia',cursive", fontSize:36, fontWeight:700, color:"#fff", lineHeight:1.1,textShadow:"0 2px 6px rgba(0,0,0,0.3)"}}>To A "T"</div>
+            <div style={{fontFamily:"'Dancing Script','Georgia',cursive", fontSize:22, fontWeight:700, color:"rgba(255,255,255,0.9)", lineHeight:1}}>Boutique</div>
+          </div>
         </div>
         <div style={{color:"rgba(255,255,255,0.92)", fontSize:15, lineHeight:1.7, marginBottom:6}}>
           Custom t-shirts, tumblers & gifts made with love
@@ -927,7 +1009,7 @@ function OrderStatus({orders, customers, show}) {
           <div style={{fontWeight:600, color:B.text, marginBottom:6}}>No orders found</div>
           <div style={{fontSize:13, color:B.textLt, marginBottom:16}}>Double-check the phone number you used when ordering, or message Tiffani directly.</div>
           <a href={FB_URL} target="_blank" rel="noreferrer" style={{display:"inline-block", padding:"10px 22px", borderRadius:12, background:"#0084FF", color:"#fff", fontWeight:700, fontSize:13, textDecoration:"none", fontFamily:"'Trebuchet MS',sans-serif"}}>
-            💬 Message Tiffani
+            💬 Message on Facebook
           </a>
         </div>
       )}
@@ -1009,10 +1091,12 @@ function Storefront({cats, addOrder, customers, show}) {
   const [cat,setCat]             = useState(null);
   const [design,setDesign]       = useState(null);
   const [uploadImg,setUploadImg] = useState(null);
-  const [color,setColor]         = useState(getBrandColors(SHIRT_BRANDS[0].id)[0]);
+  const [color,setColor]         = useState(getBrandColors(DEFAULT_PRODUCT_ID)[0]);
   const [items,setItems]         = useState([{size:"",qty:1}]);
-  const [brand,setBrand]           = useState(SHIRT_BRANDS[0]);
-  const brandColors = getBrandColors(brand.id);
+  const [ageId,setAgeId]           = useState("adult");
+  const [productId,setProductId]   = useState(DEFAULT_PRODUCT_ID);
+  const product     = getProduct(productId);
+  const brandColors = getBrandColors(productId);
   const [shirtStyle,setShirtStyle] = useState("no-pocket");
   const [placement,setPlacement] = useState([]);
   const [delivery,setDelivery]   = useState("Pickup");
@@ -1021,7 +1105,15 @@ function Storefront({cats, addOrder, customers, show}) {
   const [useReward,setUseReward] = useState(false);
   const fileRef                  = useRef();
 
-  const reset = () => { setStep(1);setCat(null);setDesign(null);setUploadImg(null);setColor(SHIRT_COLORS[0]);setItems([{size:"",qty:1}]);setPlacement([]);setBrand(SHIRT_BRANDS[0]);setColor(getBrandColors(SHIRT_BRANDS[0].id)[0]);setShirtStyle("no-pocket");setDelivery("Pickup");setCust({name:"",phone:"",notes:""});setLoyRec(null);setUseReward(false); };
+  // When age group changes, default to the first product in that group
+  const pickAge = (newAge) => {
+    setAgeId(newAge);
+    const first = CATALOG[newAge].brands[0].styles[0].id;
+    setProductId(first);
+    setColor(getBrandColors(first)[0]);
+  };
+
+  const reset = () => { setStep(1);setCat(null);setDesign(null);setUploadImg(null);setItems([{size:"",qty:1}]);setPlacement([]);setAgeId("adult");setProductId(DEFAULT_PRODUCT_ID);setColor(getBrandColors(DEFAULT_PRODUCT_ID)[0]);setShirtStyle("no-pocket");setDelivery("Pickup");setCust({name:"",phone:"",notes:""});setLoyRec(null);setUseReward(false); };
   const totalQty = items.reduce((s,i)=>s+Number(i.qty||0),0);
 
   const onPhoneBlur = () => {
@@ -1037,7 +1129,7 @@ function Storefront({cats, addOrder, customers, show}) {
   const [paying,setPaying]       = useState(false);
   const [shippingAddr,setShippingAddr] = useState({line1:"",city:"",state:"",zip:""});
 
-  const shirtTotal = cat?.isDTF ? (design?.price ? design.price * (items[0]?.qty||1) : 0) : calcTotal(brand.id, items.filter(i=>i.size));
+  const shirtTotal = calcTotal(productId, items.filter(i=>i.size));
   const shipCost   = delivery==="Ship" ? 8 : 0;
   const grandTotal = shirtTotal + shipCost;
 
@@ -1045,25 +1137,17 @@ function Storefront({cats, addOrder, customers, show}) {
     if(!cust.name.trim()){show("Please enter your name","err");return;}
     if(!cust.phone.replace(/\D/g,"")){show("Please enter your phone number","err");return;}
     if(items.some(i=>!i.size)){show("Please select a size for each item","err");return;}
-
+    if(placement.length===0){show("Please select at least one print placement","err");return;}
     if(design?.isUpload && !uploadImg){show("Please upload your design image","err");return;}
     if(delivery==="Ship" && !shippingAddr.line1.trim()){show("Please enter your shipping address","err");return;}
     if(delivery==="Ship" && !shippingAddr.zip.trim()){show("Please enter your zip code","err");return;}
 
-    const orderItems = cat?.isDTF
-      ? [{
-          design:design?.name,
-          color:"N/A", size:"DTF Sheet", qty:items[0]?.qty||1,
-          hasUpload:!!uploadImg, placement:"N/A",
-          shirt_style:"N/A", brand:"DTF Sheet", price:design?.price||0,
-          isDTF:true,
-        }]
-      : items.map(i=>({
-          design:design?.isUpload?"Custom Upload":design?.name,
-          color:color.name, size:i.size, qty:i.qty,
-          hasUpload:!!uploadImg, placement:placement.join(", "),
-          shirt_style:shirtStyle, brand:brand.name, price:getPrice(brand.id,i.size)
-        }));
+    const orderItems = items.map(i=>({
+      design:design?.isUpload?"Custom Upload":design?.name,
+      color:color.name, size:i.size, qty:i.qty,
+      hasUpload:!!uploadImg, placement:placement.join(", "),
+      shirt_style:shirtStyle, brand:product.name, price:getPrice(productId,i.size)
+    }));
 
     const shippingFull = delivery==="Ship"
       ? `${shippingAddr.line1}, ${shippingAddr.city}, ${shippingAddr.state} ${shippingAddr.zip}`
@@ -1083,7 +1167,7 @@ function Storefront({cats, addOrder, customers, show}) {
             phone: cust.phone,
             notes: (useReward?`[REWARD: ${rewardCode(cust.phone)}] `:"")+cust.notes,
             usingReward: useReward,
-            brand: brand.name,
+            brand: product.name,
             shirt_style: shirtStyle,
             placement: placement.join(", "),
           }
@@ -1143,18 +1227,12 @@ function Storefront({cats, addOrder, customers, show}) {
           <p style={{color:B.textLt,marginBottom:20,fontSize:14}}>Tap a design to continue</p>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:14}}>
             {cat.designs.map(d=>(
-              <div key={d.id} onClick={()=>{setDesign(d);setUploadImg(null);if(cat?.isDTF)setItems([{size:"sheet",qty:1}]);setStep(3);}} style={{background:"#fff",borderRadius:16,padding:"14px",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.07)",border:"2px solid transparent",transition:"all .2s",textAlign:"center"}}
+              <div key={d.id} onClick={()=>{setDesign(d);setUploadImg(null);setStep(3);}} style={{background:"#fff",borderRadius:16,padding:"14px",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.07)",border:"2px solid transparent",transition:"all .2s",textAlign:"center"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=B.green;e.currentTarget.style.transform="translateY(-2px)";}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.transform="";}}>
-                {cat?.isDTF
-                  ? <div style={{fontSize:48,margin:"8px 0"}}>{d.emoji}</div>
-                  : <ShirtSVG color={SHIRT_COLORS[0]} design={d} size={120}/>
-                }
+                <ShirtSVG color={SHIRT_COLORS[0]} design={d} size={120}/>
                 <div style={{fontSize:13,fontWeight:700,color:B.text,marginTop:6}}>{d.name}</div>
                 {d.isUpload && <div style={{fontSize:11,color:B.green,marginTop:2}}>📤 Upload your image</div>}
-                {cat?.isDTF && d.price && <div style={{fontSize:14,fontWeight:700,color:B.green,marginTop:4}}>${d.price}/sheet</div>}
-                {cat?.isDTF && d.desc && <div style={{fontSize:11,color:B.textLt,marginTop:2}}>{d.desc}</div>}
-                {cat?.isDTF && !d.price && <div style={{fontSize:12,color:B.amber,fontWeight:600,marginTop:4}}>Custom quote</div>}
               </div>
             ))}
           </div>
@@ -1165,71 +1243,8 @@ function Storefront({cats, addOrder, customers, show}) {
       {step===3 && design && (
         <div style={{animation:"fup .4s ease"}}>
           <button onClick={()=>setStep(2)} style={BBTN}>← Back</button>
-          <h2 style={{fontSize:24,color:B.text,marginBottom:18,fontFamily:"'Dancing Script','Georgia',cursive"}}>
-            {cat?.isDTF ? "📋 Your DTF Sheet Order" : "Customize Your Shirt"}
-          </h2>
-
-          {/* ── DTF SHEETS UI ──────────────────────────────────── */}
-          {cat?.isDTF && (
-            <div style={{maxWidth:520}}>
-              <div style={{background:"#fff",borderRadius:16,padding:"20px",boxShadow:"0 4px 18px rgba(0,0,0,0.08)",marginBottom:18}}>
-                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-                  <span style={{fontSize:40}}>🖨️</span>
-                  <div>
-                    <div style={{fontWeight:700,color:B.text,fontSize:16}}>{design.name}</div>
-                    <div style={{color:B.textLt,fontSize:13,marginTop:2}}>{design.desc}</div>
-                    {design.price
-                      ? <div style={{color:B.green,fontWeight:700,fontSize:18,marginTop:4}}>${design.price} per sheet</div>
-                      : <div style={{color:B.amber,fontWeight:700,fontSize:14,marginTop:4}}>Custom quote — Tiffani will reach out!</div>
-                    }
-                  </div>
-                </div>
-                {design.price && (
-                  <div>
-                    <Lbl>How many sheets?</Lbl>
-                    <div style={{display:"flex",gap:10,alignItems:"center",marginTop:8}}>
-                      <button onClick={()=>setItems([{size:"sheet",qty:Math.max(1,(items[0]?.qty||1)-1)}])} style={{width:36,height:36,borderRadius:8,border:"1.5px solid #ddd",background:"#fff",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-                      <div style={{fontSize:22,fontWeight:700,color:B.text,minWidth:40,textAlign:"center"}}>{items[0]?.qty||1}</div>
-                      <button onClick={()=>setItems([{size:"sheet",qty:(items[0]?.qty||1)+1}])} style={{width:36,height:36,borderRadius:8,border:"1.5px solid #ddd",background:"#fff",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
-                      <div style={{fontSize:13,color:B.textLt,marginLeft:4}}>sheet{(items[0]?.qty||1)!==1?"s":""}</div>
-                    </div>
-                    <div style={{background:B.greenPale,borderRadius:10,padding:"10px 14px",marginTop:14,border:`1.5px solid ${B.greenLt}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontWeight:600,color:B.green,fontFamily:"'Trebuchet MS',sans-serif"}}>Estimated Total</span>
-                      <span style={{fontSize:20,fontWeight:700,color:B.green,fontFamily:"'Trebuchet MS',sans-serif"}}>${design.price * (items[0]?.qty||1)}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-              {/* Upload for DTF */}
-              <div style={{background:"#fff",borderRadius:16,padding:"20px",boxShadow:"0 4px 18px rgba(0,0,0,0.08)",marginBottom:18}}>
-                <Lbl>Upload Your Design Image <span style={{color:B.amber}}>(optional — you can send later via Messenger)</span></Lbl>
-                <div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${!uploadImg?B.amber:B.greenLt}`,borderRadius:14,padding:"18px 16px",textAlign:"center",cursor:"pointer",background:B.cream,marginTop:8,transition:"all .2s"}}
-                  onMouseEnter={e=>e.currentTarget.style.background=B.creamDk}
-                  onMouseLeave={e=>e.currentTarget.style.background=B.cream}>
-                  {uploadImg
-                    ? <div><img src={uploadImg} alt="upload" style={{maxHeight:80,maxWidth:"100%",borderRadius:8,marginBottom:6}}/><div style={{fontSize:12,color:B.green,fontWeight:600}}>✓ Tap to change</div></div>
-                    : <div><div style={{fontSize:34,marginBottom:6}}>📤</div><div style={{fontSize:14,color:B.textMid,fontWeight:600}}>Tap to upload design</div><div style={{fontSize:11,color:B.textLt,marginTop:3}}>JPG, PNG — max 5MB</div></div>
-                  }
-                </div>
-                <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={onUpload}/>
-              </div>
-              {/* Delivery */}
-              <div style={{background:"#fff",borderRadius:16,padding:"20px",boxShadow:"0 4px 18px rgba(0,0,0,0.08)",marginBottom:18}}>
-                <Lbl>Delivery</Lbl>
-                <div style={{display:"flex",gap:10,marginTop:6}}>
-                  {["Pickup","Ship"].map(d=>(
-                    <button key={d} onClick={()=>setDelivery(d)} style={{flex:1,padding:"10px",borderRadius:10,border:"2px solid",borderColor:delivery===d?B.green:"#ddd",background:delivery===d?B.green:"#fff",color:delivery===d?"#fff":"#888",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:600,cursor:"pointer",fontSize:13}}>
-                      {d==="Pickup"?"🏪 Pickup":"📦 Ship"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <button onClick={()=>setStep(4)} style={PBTN}>Next: Your Info →</button>
-            </div>
-          )}
-
-          {/* ── SHIRT UI ─────────────────────────────────────────── */}
-          {!cat?.isDTF && <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,alignItems:"start"}}>
+          <h2 style={{fontSize:24,color:B.text,marginBottom:18,fontFamily:"'Dancing Script','Georgia',cursive"}}>Customize Your Shirt</h2>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,alignItems:"start"}}>
             {/* Preview */}
             <div style={{background:"#fff",borderRadius:20,padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.08)",textAlign:"center",position:"sticky",top:80}}>
               <div style={{fontSize:10,color:B.textLt,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Live Preview</div>
@@ -1238,42 +1253,77 @@ function Storefront({cats, addOrder, customers, show}) {
             </div>
             {/* Controls */}
             <div>
-              {/* Upload — only for Custom Design */}
-              {design.isUpload && (
-                <div style={{marginBottom:20}}>
-                  <Lbl>Upload Your Design Image *</Lbl>
-                  <div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${!uploadImg?B.amber:B.greenLt}`,borderRadius:14,padding:"22px 16px",textAlign:"center",cursor:"pointer",background:B.cream,transition:"all .2s"}}
-                    onMouseEnter={e=>e.currentTarget.style.background=B.creamDk}
-                    onMouseLeave={e=>e.currentTarget.style.background=B.cream}>
-                    {uploadImg
-                      ? <div><img src={uploadImg} alt="upload" style={{maxHeight:90,maxWidth:"100%",borderRadius:8,marginBottom:6}}/><div style={{fontSize:12,color:B.green,fontWeight:600}}>✓ Tap to change</div></div>
-                      : <div><div style={{fontSize:34,marginBottom:6}}>📤</div><div style={{fontSize:14,color:B.textMid,fontWeight:600}}>Tap to upload</div><div style={{fontSize:11,color:B.textLt,marginTop:3}}>JPG, PNG, GIF — max 5MB</div></div>
-                    }
-                  </div>
-                  <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={onUpload}/>
-                </div>
-              )}
-              {/* Brand */}
+              {/* Print File — available for all designs */}
               <div style={{marginBottom:20}}>
-                <Lbl>Shirt Brand</Lbl>
-                <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:6}}>
-                  {SHIRT_BRANDS.map(b=>(
-                    <button key={b.id} onClick={()=>{ setBrand(b); setColor(getBrandColors(b.id)[0]); }} style={{
-                      display:"flex", alignItems:"center", justifyContent:"space-between",
-                      padding:"12px 14px", borderRadius:10, border:"2px solid",
-                      borderColor:brand.id===b.id?B.green:"#ddd",
-                      background:brand.id===b.id?B.greenPale:"#fff",
-                      cursor:"pointer", transition:"all .15s", textAlign:"left",
-                    }}>
-                      <div>
-                        <div style={{fontSize:14,fontWeight:700,color:brand.id===b.id?B.green:B.text,fontFamily:"'Trebuchet MS',sans-serif"}}>{b.name}</div>
-                        <div style={{fontSize:11,color:B.textLt,fontFamily:"'Trebuchet MS',sans-serif",marginTop:2}}>{b.desc}</div>
+                <Lbl>
+                  {design.isUpload ? "Upload Your Design Image *" : "Your Print File (Optional — upload your own or use our design)"}
+                </Lbl>
+                <div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${!uploadImg?B.amber:B.greenLt}`,borderRadius:14,padding:"18px 16px",textAlign:"center",cursor:"pointer",background:B.cream,transition:"all .2s"}}
+                  onMouseEnter={e=>e.currentTarget.style.background=B.creamDk}
+                  onMouseLeave={e=>e.currentTarget.style.background=B.cream}>
+                  {uploadImg
+                    ? <div><img src={uploadImg} alt="upload" style={{maxHeight:90,maxWidth:"100%",borderRadius:8,marginBottom:6}}/><div style={{fontSize:12,color:B.green,fontWeight:600}}>✓ Tap to change</div></div>
+                    : <div>
+                        <div style={{fontSize:30,marginBottom:5}}>📤</div>
+                        <div style={{fontSize:13,color:B.textMid,fontWeight:600}}>Upload Your File</div>
+                        <div style={{fontSize:11,color:B.textLt,marginTop:3}}>JPG, PNG, PDF, AI — max 5MB · Up to 12″×15″ print area</div>
+                        {!design.isUpload && <div style={{fontSize:11,color:B.textLt,marginTop:4}}>Leave blank to use the "{design.name}" design above</div>}
                       </div>
-                      <div style={{textAlign:"right",flexShrink:0,marginLeft:10}}>
-                        <div style={{fontSize:13,fontWeight:700,color:brand.id===b.id?B.green:B.textMid,fontFamily:"'Trebuchet MS',sans-serif"}}>${b.basePrice}</div>
-                        <div style={{fontSize:10,color:B.textLt,fontFamily:"'Trebuchet MS',sans-serif"}}>2XL+ ${b.bigPrice}</div>
+                  }
+                </div>
+                <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.eps" style={{display:"none"}} onChange={onUpload}/>
+                {uploadImg && (
+                  <button onClick={()=>setUploadImg(null)} style={{marginTop:6,fontSize:11,color:"#C0392B",background:"none",border:"none",cursor:"pointer",padding:0}}>
+                    ✕ Remove file
+                  </button>
+                )}
+              </div>
+              {/* Age group */}
+              <div style={{marginBottom:16}}>
+                <Lbl>Who's it for?</Lbl>
+                <div style={{display:"flex",gap:10,marginTop:6}}>
+                  {Object.entries(CATALOG).map(([aId,age])=>(
+                    <button key={aId} onClick={()=>pickAge(aId)} style={{
+                      flex:1, padding:"10px 8px", borderRadius:10, border:"2px solid",
+                      borderColor:ageId===aId?B.green:"#ddd",
+                      background:ageId===aId?B.greenPale:"#fff",
+                      cursor:"pointer", transition:"all .15s",
+                      fontSize:13, fontWeight:700, color:ageId===aId?B.green:B.text, fontFamily:"'Trebuchet MS',sans-serif",
+                    }}>{age.label}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Brand → Style */}
+              <div style={{marginBottom:20}}>
+                <Lbl>Brand & Style</Lbl>
+                <div style={{display:"flex",flexDirection:"column",gap:14,marginTop:6}}>
+                  {CATALOG[ageId].brands.map(b=>(
+                    <div key={b.id}>
+                      <div style={{fontSize:12,fontWeight:700,color:B.textMid,fontFamily:"'Trebuchet MS',sans-serif",marginBottom:6}}>{b.name}</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        {b.styles.map(s=>{
+                          const sel = productId===s.id;
+                          return (
+                            <button key={s.id} onClick={()=>{ setProductId(s.id); setColor(getBrandColors(s.id)[0]); }} style={{
+                              display:"flex", alignItems:"center", justifyContent:"space-between",
+                              padding:"11px 13px", borderRadius:10, border:"2px solid",
+                              borderColor:sel?B.green:"#ddd",
+                              background:sel?B.greenPale:"#fff",
+                              cursor:"pointer", transition:"all .15s", textAlign:"left",
+                            }}>
+                              <div>
+                                <div style={{fontSize:14,fontWeight:700,color:sel?B.green:B.text,fontFamily:"'Trebuchet MS',sans-serif"}}>{s.label}</div>
+                                <div style={{fontSize:11,color:B.textLt,fontFamily:"'Trebuchet MS',sans-serif",marginTop:2}}>{s.desc}</div>
+                              </div>
+                              <div style={{textAlign:"right",flexShrink:0,marginLeft:10}}>
+                                <div style={{fontSize:13,fontWeight:700,color:sel?B.green:B.textMid,fontFamily:"'Trebuchet MS',sans-serif"}}>${s.basePrice}</div>
+                                {s.bigPrice>s.basePrice && <div style={{fontSize:10,color:B.textLt,fontFamily:"'Trebuchet MS',sans-serif"}}>2XL+ ${s.bigPrice}</div>}
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1314,7 +1364,7 @@ function Storefront({cats, addOrder, customers, show}) {
                   <div key={idx} style={{display:"flex",gap:8,alignItems:"center",marginTop:8}}>
                     <select value={item.size} onChange={e=>{const it=[...items];it[idx].size=e.target.value;setItems(it);}} style={{...INP(),flex:1}}>
                       <option value="">Pick size</option>
-                      {SIZES.map(s=><option key={s}>{s}</option>)}
+                      {getSizesForBrand(productId).map(s=><option key={s}>{s}</option>)}
                     </select>
                     <div style={{display:"flex",alignItems:"center",gap:5}}>
                       <button onClick={()=>{const it=[...items];it[idx].qty=Math.max(1,it[idx].qty-1);setItems(it);}} style={{width:28,height:28,borderRadius:7,border:`2px solid ${B.wood}`,background:"#fff",cursor:"pointer",fontSize:15,fontWeight:700,color:B.green}}>−</button>
@@ -1325,6 +1375,39 @@ function Storefront({cats, addOrder, customers, show}) {
                   </div>
                 ))}
                 <button onClick={()=>setItems([...items,{size:"",qty:1}])} style={{marginTop:8,fontSize:12,color:B.green,background:"none",border:`2px dashed ${B.amber}`,borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>+ Add Size</button>
+              </div>
+              {/* Placement */}
+              <div style={{marginBottom:22}}>
+                <Lbl>Print Placement <span style={{color:B.textLt,fontWeight:400}}>(select all that apply)</span></Lbl>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:6}}>
+                  {[
+                    {id:"front_full",    label:"Front Full",     icon:"👕", desc:"Center chest, full front"},
+                    {id:"front_pocket",  label:"Front Pocket",   icon:"🔲", desc:"Left chest pocket area"},
+                    {id:"back_full",     label:"Back Full",      icon:"🔄", desc:"Full back print"},
+                    {id:"back_top",      label:"Back Top/Yoke",  icon:"⬆️", desc:"Upper back / shoulder"},
+                    {id:"sleeve",        label:"Sleeve",         icon:"💪", desc:"Left or right sleeve"},
+                    {id:"other",         label:"Other / Ask Me", icon:"💬", desc:"Describe in notes"},
+                  ].map(p=>{
+                    const sel = placement.includes(p.id);
+                    return (
+                      <button key={p.id} onClick={()=>setPlacement(prev=>sel?prev.filter(x=>x!==p.id):[...prev,p.id])} style={{
+                        display:"flex", alignItems:"center", gap:8, padding:"10px 12px",
+                        borderRadius:10, border:"2px solid", textAlign:"left",
+                        borderColor: sel ? B.green : "#ddd",
+                        background: sel ? B.greenPale : "#fff",
+                        cursor:"pointer", transition:"all .15s",
+                      }}>
+                        <span style={{fontSize:20,flexShrink:0}}>{p.icon}</span>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:700,color:sel?B.green:B.text,fontFamily:"'Trebuchet MS',sans-serif"}}>{p.label}</div>
+                          <div style={{fontSize:10,color:B.textLt,fontFamily:"'Trebuchet MS',sans-serif"}}>{p.desc}</div>
+                        </div>
+                        {sel && <span style={{marginLeft:"auto",color:B.green,fontSize:14,flexShrink:0}}>✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {placement.length===0 && <div style={{fontSize:11,color:B.amber,marginTop:6,fontFamily:"'Trebuchet MS',sans-serif"}}>⚠️ Please select at least one placement</div>}
               </div>
               {/* Delivery */}
               <div style={{marginBottom:22}}>
@@ -1346,13 +1429,13 @@ function Storefront({cats, addOrder, customers, show}) {
                       <div style={{fontSize:11,color:B.textLt,fontWeight:400,marginTop:1}}>+ $8 shipping if not pickup</div>
                     </div>
                     <div style={{fontSize:22,fontWeight:700,color:B.green,fontFamily:"'Trebuchet MS',sans-serif"}}>
-                      ${calcTotal(brand.id, items.filter(i=>i.size))}
+                      ${calcTotal(productId, items.filter(i=>i.size))}
                     </div>
                   </div>
                   <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:5}}>
                     {items.filter(i=>i.size).map((i,idx)=>(
                       <span key={idx} style={{fontSize:11,background:"#fff",color:B.textMid,borderRadius:6,padding:"2px 8px",border:`1px solid ${B.wood}`,fontFamily:"'Trebuchet MS',sans-serif"}}>
-                        {i.size} ×{i.qty} = ${getPrice(brand.id,i.size)*Number(i.qty)}
+                        {i.size} ×{i.qty} = ${getPrice(productId,i.size)*Number(i.qty)}
                       </span>
                     ))}
                   </div>
@@ -1360,7 +1443,7 @@ function Storefront({cats, addOrder, customers, show}) {
               )}
               <button onClick={()=>setStep(4)} style={PBTN}>Next: Your Info →</button>
             </div>
-          </div>}
+          </div>
         </div>
       )}
 
@@ -1372,28 +1455,14 @@ function Storefront({cats, addOrder, customers, show}) {
           <p style={{color:B.textLt,marginBottom:18,fontSize:14}}>Your phone number tracks your loyalty rewards 🌟</p>
           {/* Summary */}
           <div style={{background:"#fff",borderRadius:14,padding:"14px",marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,0.07)",display:"flex",gap:12,alignItems:"center"}}>
-            {cat?.isDTF
-              ? <div style={{fontSize:50,flexShrink:0}}>🖨️</div>
-              : <ShirtSVG color={color} design={design} uploadImg={uploadImg} shirtStyle={shirtStyle} size={72}/>
-            }
+            <ShirtSVG color={color} design={design} uploadImg={uploadImg} shirtStyle={shirtStyle} size={72}/>
             <div>
               <div style={{fontWeight:700,color:B.text,fontSize:14}}>{design?.name}</div>
-              {cat?.isDTF ? (
-                <>
-                  <div style={{color:B.textLt,fontSize:12,marginTop:2}}>DTF Heat Transfer Sheet · {delivery}</div>
-                  <div style={{color:B.green,fontSize:12,marginTop:2,fontWeight:600}}>{items[0]?.qty||1} sheet{(items[0]?.qty||1)!==1?"s":""}</div>
-                  {design.price && <div style={{fontSize:14,fontWeight:700,color:B.green,marginTop:4}}>Est. Total: ${design.price*(items[0]?.qty||1)}{delivery==="Ship"?" + $8 ship":""}</div>}
-                  {!design.price && <div style={{fontSize:13,color:B.amber,marginTop:4,fontWeight:600}}>Custom quote — Tiffani will reach out!</div>}
-                </>
-              ) : (
-                <>
-                  <div style={{color:B.textLt,fontSize:12,marginTop:2}}>{color.name} · {delivery}</div>
-                  <div style={{color:B.green,fontSize:12,marginTop:2,fontWeight:600}}>{totalQty} shirt{totalQty!==1?"s":""}: {(items||[]).map(i=>`${i.size}×${i.qty}`).join(", ")}</div>
-                  <div style={{fontSize:12,color:B.textMid,marginTop:2}}>{brand.name} · {shirtStyle==="pocket"?"With Pocket":"No Pocket"}</div>
-                  {placement.length>0 && <div style={{fontSize:11,color:B.textLt,marginTop:2}}>📍 {placement.map(p=>p.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())).join(", ")}</div>}
-                  <div style={{fontSize:14,fontWeight:700,color:B.green,marginTop:4}}>Est. Total: ${calcTotal(brand.id, items.filter(i=>i.size))}{delivery==="Ship"?" + $8 ship":""}</div>
-                </>
-              )}
+              <div style={{color:B.textLt,fontSize:12,marginTop:2}}>{color.name} · {delivery}</div>
+              <div style={{color:B.green,fontSize:12,marginTop:2,fontWeight:600}}>{totalQty} shirt{totalQty!==1?"s":""}: {(items||[]).map(i=>`${i.size}×${i.qty}`).join(", ")}</div>
+              <div style={{fontSize:12,color:B.textMid,marginTop:2}}>{product.name} · {shirtStyle==="pocket"?"With Pocket":"No Pocket"}</div>
+              {placement.length>0 && <div style={{fontSize:11,color:B.textLt,marginTop:2}}>📍 {placement.map(p=>p.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())).join(", ")}</div>}
+              <div style={{fontSize:14,fontWeight:700,color:B.green,marginTop:4}}>Est. Total: ${calcTotal(productId, items.filter(i=>i.size))}{delivery==="Ship"?" + $8 ship":""}</div>
             </div>
           </div>
           {loyRec && <LoyaltyBar rec={loyRec}/>}
@@ -1435,7 +1504,7 @@ function Storefront({cats, addOrder, customers, show}) {
             <div style={{background:`linear-gradient(135deg,${B.greenDk},${B.green})`,borderRadius:14,padding:"16px 18px",color:"#fff"}}>
               <div style={{fontSize:13,opacity:.85,marginBottom:8}}>Order Summary</div>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-                <span>{totalQty} shirt{totalQty!==1?"s":""} ({brand.name})</span>
+                <span>{totalQty} shirt{totalQty!==1?"s":""} ({product.name})</span>
                 <span>${shirtTotal}</span>
               </div>
               {delivery==="Ship" && (
@@ -1733,6 +1802,7 @@ function ContactView({messages, setMessages, show}) {
 
   const submitForm = async () => {
     if(!form.name.trim()||!form.message.trim()){show("Please fill in your name and message","err");return;}
+    if(!form.phone.replace(/\D/g,"").trim()){show("Please enter your phone number so Tiffani can reach you","err");return;}
     const msg = {
       name: form.name,
       phone: form.phone,
@@ -1760,7 +1830,7 @@ function ContactView({messages, setMessages, show}) {
       <div style={{background:"linear-gradient(135deg,#0084FF,#0066CC)",borderRadius:18,padding:"22px",marginBottom:18,textAlign:"center",boxShadow:"0 6px 24px rgba(0,132,255,0.3)"}}>
         <div style={{fontSize:38,marginBottom:6}}>💬</div>
         <div style={{fontFamily:"'Dancing Script','Georgia',cursive",fontSize:24,color:"#fff",marginBottom:5}}>Chat with Tiffani</div>
-        <div style={{fontSize:13,color:"rgba(255,255,255,0.88)",marginBottom:16,lineHeight:1.6}}>For custom designs, complex orders, or anything personal — message her directly. She typically responds within a few hours!</div>
+        <div style={{fontSize:13,color:"rgba(255,255,255,0.88)",marginBottom:16,lineHeight:1.6}}>For custom designs, complex orders, or anything personal — message her directly on Facebook, or use the form below to leave your phone number and she'll call or text you back!</div>
         <a href={FB_URL} target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:8,background:"#fff",color:"#0084FF",borderRadius:12,padding:"11px 24px",fontWeight:700,fontSize:15,textDecoration:"none",boxShadow:"0 4px 14px rgba(0,0,0,0.15)",fontFamily:"'Trebuchet MS',sans-serif"}}>
           📱 Open Messenger
         </a>
@@ -1793,7 +1863,7 @@ function ContactView({messages, setMessages, show}) {
       {/* Contact Form */}
       <div style={{background:"#fff",borderRadius:18,padding:"18px",boxShadow:"0 4px 18px rgba(0,0,0,0.08)"}}>
         <div style={{fontWeight:700,color:B.text,marginBottom:3}}>📝 Leave a Message</div>
-        <div style={{fontSize:12,color:B.textLt,marginBottom:14}}>Don't have Facebook? Leave a message and Tiffani will follow up.</div>
+        <div style={{fontSize:12,color:B.textLt,marginBottom:14}}>Leave your name, phone number and message — Tiffani will text or call you back!</div>
         {sent
           ? <div style={{textAlign:"center",padding:"24px 16px",animation:"fup .4s ease"}}>
               <div style={{fontSize:44,marginBottom:8}}>✅</div>
@@ -1803,7 +1873,7 @@ function ContactView({messages, setMessages, show}) {
             </div>
           : <div style={{display:"flex",flexDirection:"column",gap:12}}>
               <div><Lbl>Your Name *</Lbl><input style={INP()} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="First & Last Name"/></div>
-              <div><Lbl>Phone or Facebook Name</Lbl><input style={INP()} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="Best way to reach you"/></div>
+              <div><Lbl>Your Phone Number * <span style={{color:B.textLt,fontWeight:400}}>(so Tiffani can text or call you back)</span></Lbl><input style={INP()} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="(555) 555-5555" type="tel"/></div>
               <div><Lbl>Message *</Lbl><textarea style={{...INP(),height:90,resize:"vertical"}} value={form.message} onChange={e=>setForm({...form,message:e.target.value})} placeholder="Tell her what you need..."/></div>
               <button onClick={submitForm} style={PBTN}>Send Message 💬</button>
             </div>
@@ -2146,7 +2216,12 @@ function Admin({cats, setCats, orders, setOrders, customers, setCustomers, messa
                       <div style={{fontSize:13,color:B.textMid,marginTop:8,lineHeight:1.5}}>{msg.message}</div>
                     </div>
                     <div style={{display:"flex",gap:7,flexShrink:0}}>
-                      <a href={FB_URL} target="_blank" rel="noreferrer" style={{padding:"6px 12px",borderRadius:8,background:"#0084FF",color:"#fff",fontSize:11,fontWeight:600,textDecoration:"none",fontFamily:"'Trebuchet MS',sans-serif"}}>Reply on Messenger</a>
+                      {msg.phone && (
+                        <a href={`tel:${msg.phone}`} style={{padding:"6px 12px",borderRadius:8,background:B.green,color:"#fff",fontSize:11,fontWeight:600,textDecoration:"none",fontFamily:"'Trebuchet MS',sans-serif"}}>📞 Call</a>
+                      )}
+                      {msg.phone && (
+                        <a href={`sms:${msg.phone}`} style={{padding:"6px 12px",borderRadius:8,background:"#2980B9",color:"#fff",fontSize:11,fontWeight:600,textDecoration:"none",fontFamily:"'Trebuchet MS',sans-serif"}}>💬 Text</a>
+                      )}
                       <button onClick={async e=>{ e.stopPropagation(); await db.delete("messages",msg.id); setMessages(prev=>prev.filter(m=>m.id!==msg.id)); }} style={{padding:"6px 10px",borderRadius:8,border:"none",background:"#FDECEA",color:"#C0392B",fontSize:11,fontWeight:600,cursor:"pointer"}}>Delete</button>
                     </div>
                   </div>
