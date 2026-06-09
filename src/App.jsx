@@ -1,5 +1,5 @@
 // To A "T" Boutique — Full System v1.0 (clean build)
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 // ─── BRAND ────────────────────────────────────────────────────────────────────
 const B = {
@@ -1089,6 +1089,39 @@ function OrderStatus({orders, customers, show}) {
 function Storefront({cats, addOrder, customers, show}) {
   const [step,setStep]           = useState(1);
   const [cat,setCat]             = useState(null);
+  // Designs synced from Google Drive (Supabase `designs` table), grouped by category
+  const [syncedByCat,setSyncedByCat] = useState({});
+  useEffect(()=>{
+    db.get("designs").then(rows=>{
+      const grouped = {};
+      (rows||[]).filter(d=>d.active!==false).forEach(d=>{
+        const cn = (d.category||"Other").trim();
+        (grouped[cn] = grouped[cn] || []).push({
+          id: "drive-"+d.drive_id,
+          name: d.name,
+          image_url: d.image_url,
+          thumb_url: d.thumb_url || d.image_url,
+        });
+      });
+      setSyncedByCat(grouped);
+    });
+  },[]);
+
+  // Merge admin categories with Drive-synced designs. Any Drive category not
+  // already in the admin list still shows up so nothing gets lost.
+  const mergedCats = useMemo(()=>{
+    const out = cats.map(c=>{
+      const synced = syncedByCat[c.name] || [];
+      return { ...c, designs: [...(c.designs||[]), ...synced] };
+    });
+    Object.keys(syncedByCat).forEach(cn=>{
+      if (!cats.some(c=>c.name===cn)) {
+        out.push({ id:"drive-cat-"+cn, name:cn, emoji:"🎨", designs: syncedByCat[cn] });
+      }
+    });
+    return out;
+  }, [cats, syncedByCat]);
+
   const [design,setDesign]       = useState(null);
   const [uploadImg,setUploadImg] = useState(null);
   const [color,setColor]         = useState(getBrandColors(DEFAULT_PRODUCT_ID)[0]);
@@ -1132,7 +1165,7 @@ function Storefront({cats, addOrder, customers, show}) {
       id: Date.now()+"-"+Math.random().toString(36).slice(2,7),
       designName: design?.isUpload ? "Custom Upload" : design?.name,
       isUpload: !!design?.isUpload,
-      uploadImg: uploadImg || null,
+      uploadImg: uploadImg || design?.image_url || null,
       productId, productName: product.name,
       colorName: color.name, colorHex: color.hex,
       shirtStyle,
@@ -1255,7 +1288,7 @@ function Storefront({cats, addOrder, customers, show}) {
           <h2 style={{fontSize:30,color:B.text,marginBottom:6,fontFamily:"'Dancing Script','Georgia',cursive"}}>What are you looking for?</h2>
           <p style={{color:B.textLt,marginBottom:22,fontSize:14}}>Pick a category to browse designs</p>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>
-            {cats.map(c=>(
+            {mergedCats.map(c=>(
               <div key={c.id} onClick={()=>{setCat(c);setStep(2);}} style={{background:"#fff",borderRadius:16,padding:"20px 14px",textAlign:"center",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.07)",border:"2px solid transparent",transition:"all .2s"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=B.green;e.currentTarget.style.transform="translateY(-3px)";}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.transform="";}}>
@@ -1279,7 +1312,9 @@ function Storefront({cats, addOrder, customers, show}) {
               <div key={d.id} onClick={()=>{setDesign(d);setUploadImg(null);setStep(3);}} style={{background:"#fff",borderRadius:16,padding:"14px",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.07)",border:"2px solid transparent",transition:"all .2s",textAlign:"center"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=B.green;e.currentTarget.style.transform="translateY(-2px)";}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.transform="";}}>
-                <ShirtSVG color={SHIRT_COLORS[0]} design={d} size={120}/>
+                {d.image_url
+                  ? <div style={{height:120,display:"flex",alignItems:"center",justifyContent:"center"}}><img src={d.thumb_url||d.image_url} alt={d.name} loading="lazy" style={{maxHeight:120,maxWidth:"100%",objectFit:"contain"}}/></div>
+                  : <ShirtSVG color={SHIRT_COLORS[0]} design={d} size={120}/>}
                 <div style={{fontSize:13,fontWeight:700,color:B.text,marginTop:6}}>{d.name}</div>
                 {d.isUpload && <div style={{fontSize:11,color:B.green,marginTop:2}}>📤 Upload your image</div>}
               </div>
@@ -1297,7 +1332,7 @@ function Storefront({cats, addOrder, customers, show}) {
             {/* Preview */}
             <div style={{background:"#fff",borderRadius:20,padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.08)",textAlign:"center",position:"sticky",top:80}}>
               <div style={{fontSize:10,color:B.textLt,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Live Preview</div>
-              <ShirtSVG color={color} design={design} uploadImg={uploadImg} shirtStyle={shirtStyle} size={260}/>
+              <ShirtSVG color={color} design={design} uploadImg={uploadImg || design?.image_url} shirtStyle={shirtStyle} size={260}/>
               <div style={{marginTop:8,fontSize:12,color:B.textLt}}>{color.name} · {design.name}</div>
             </div>
             {/* Controls */}
