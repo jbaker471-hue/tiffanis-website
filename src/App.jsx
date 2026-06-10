@@ -182,34 +182,8 @@ const SHIRTS_FOR_REWARD = 10;
 const FB_URL = "https://m.me/toatsublimationboutique";
 
 const DEFAULT_CATS = [
-  {id:"holiday",name:"Holiday & Seasonal",emoji:"🎄",designs:[
-    {id:"h1",name:"Merry & Bright",emoji:"✨",preview:"MERRY\n& BRIGHT",style:"serif"},
-    {id:"h2",name:"Ho Ho Ho",emoji:"🎅",preview:"HO HO\nHO!",style:"chunky"},
-    {id:"h3",name:"Thankful Blessed",emoji:"🍂",preview:"Thankful\nBlessed",style:"script"},
-    {id:"h4",name:"Spooky Season",emoji:"🎃",preview:"SPOOKY\nSEASON",style:"bold"},
-  ]},
-  {id:"family",name:"Family & Events",emoji:"👨‍👩‍👧‍👦",designs:[
-    {id:"f1",name:"Family Vacation",emoji:"🌴",preview:"FAMILY\nVACATION\n2026",style:"bold"},
-    {id:"f2",name:"Wolf Pack",emoji:"🐺",preview:"WOLF\nPACK",style:"bold"},
-    {id:"f3",name:"Reunion Crew",emoji:"🤝",preview:"REUNION\nCREW",style:"serif"},
-    {id:"f4",name:"New to the Pack",emoji:"🐾",preview:"NEW TO\nTHE PACK",style:"chunky"},
-  ]},
-  {id:"sports",name:"Sports & School",emoji:"🏈",designs:[
-    {id:"s1",name:"Game Day",emoji:"🏟️",preview:"GAME\nDAY",style:"varsity"},
-    {id:"s2",name:"Cheer Mom",emoji:"📣",preview:"CHEER\nMOM",style:"script"},
-    {id:"s3",name:"Baseball Dad",emoji:"⚾",preview:"BASEBALL\nDAD",style:"varsity"},
-    {id:"s4",name:"Team Spirit",emoji:"🏆",preview:"TEAM\nSPIRIT",style:"bold"},
-  ]},
-  {id:"gifts",name:"Gifts & Occasions",emoji:"🎁",designs:[
-    {id:"g1",name:"Legend / Dad",emoji:"👨",preview:"LEGEND\nDAD\nPAPA",style:"bold"},
-    {id:"g2",name:"Birthday Girl",emoji:"🎂",preview:"Birthday\nGirl",style:"script"},
-    {id:"g3",name:"Bride Tribe",emoji:"💍",preview:"BRIDE\nTRIBE",style:"script"},
-    {id:"g4",name:"Real Estate",emoji:"🏠",preview:"HOME\nSWEET\nHOME",style:"chunky"},
-  ]},
   {id:"custom",name:"Custom Design",emoji:"📤",designs:[
     {id:"u1",name:"Upload My Image",emoji:"🖼️",preview:"",style:"upload",isUpload:true},
-    {id:"u2",name:"Screenshot / Inspo",emoji:"📸",preview:"",style:"upload",isUpload:true},
-    {id:"u3",name:"Logo or Artwork",emoji:"🎨",preview:"",style:"upload",isUpload:true},
   ]},
 ];
 
@@ -569,7 +543,7 @@ function SecHead({children}) { return <div style={{fontSize:11,letterSpacing:2,t
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [view, setView]           = useState("home");
-  const [cats, setCats]           = useState(() => store.get("tatb_cats", DEFAULT_CATS));
+  const [cats, setCats]           = useState(() => store.get("tatb_cats_v2", DEFAULT_CATS));
   const [orders, setOrders]       = useState([]);
   const [customers, setCustomers] = useState([]);
   const [messages, setMessages]   = useState([]);
@@ -578,7 +552,7 @@ export default function App() {
   const {t, show}                 = useToast();
 
   // Keep categories in localStorage (admin config)
-  useEffect(()=>{ store.set("tatb_cats",cats); },[cats]);
+  useEffect(()=>{ store.set("tatb_cats_v2",cats); },[cats]);
 
   // Handle Stripe redirect back
   useEffect(()=>{
