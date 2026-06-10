@@ -465,7 +465,27 @@ function ShirtSVG({color=SHIRT_COLORS[0], design, uploadImg, shirtStyle="no-pock
         gap:1, pointerEvents:"none", zIndex:3,
       }}>
         {isUp && uploadImg && (
-          <img src={uploadImg} alt={design?.name||"Your design"} style={{maxWidth:"100%", maxHeight:"100%", objectFit:"contain", filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.3))"}}/>
+          <div style={{position:"relative", width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center"}}>
+            <img src={uploadImg} alt={design?.name||"Your design"} style={{maxWidth:"100%", maxHeight:"100%", objectFit:"contain", filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.3))"}}/>
+            {/* Gentle anti-theft watermark (preview only) */}
+            <div aria-hidden="true" style={{
+              position:"absolute", inset:0, pointerEvents:"none",
+              backgroundImage:"repeating-linear-gradient(-30deg, transparent 0, transparent 38px, rgba(255,255,255,0.01) 38px, rgba(255,255,255,0.01) 76px)",
+              display:"flex", flexWrap:"wrap", alignContent:"center", justifyContent:"center",
+              transform:"rotate(-22deg)", overflow:"hidden",
+            }}>
+              {Array.from({length:9}).map((_,i)=>(
+                <span key={i} style={{
+                  flex:"0 0 100%", textAlign:"center",
+                  fontFamily:"'Trebuchet MS',sans-serif", fontWeight:700,
+                  fontSize:Math.max(7, size*0.045), letterSpacing:1,
+                  color:"rgba(120,120,120,0.32)",
+                  textShadow:"0 1px 1px rgba(255,255,255,0.25)",
+                  lineHeight:1.9, whiteSpace:"nowrap", userSelect:"none",
+                }}>To A "T" Boutique</span>
+              ))}
+            </div>
+          </div>
         )}
         {isUp && !uploadImg && (
           <div style={{border:"2px dashed rgba(0,0,0,0.25)", borderRadius:6, padding:"6px", textAlign:"center", background:"rgba(255,255,255,0.4)", width:"90%"}}>
@@ -1347,7 +1367,14 @@ function Storefront({cats, addOrder, customers, show}) {
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=B.green;e.currentTarget.style.transform="translateY(-2px)";}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.transform="";}}>
                 {d.image_url
-                  ? <div style={{height:120,display:"flex",alignItems:"center",justifyContent:"center"}}><img src={d.thumb_url||d.image_url} alt={d.name} loading="lazy" style={{maxHeight:120,maxWidth:"100%",objectFit:"contain"}}/></div>
+                  ? <div style={{height:120,position:"relative",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                      <img src={d.thumb_url||d.image_url} alt={d.name} loading="lazy" style={{maxHeight:120,maxWidth:"100%",objectFit:"contain"}}/>
+                      <div aria-hidden="true" style={{position:"absolute",inset:0,pointerEvents:"none",display:"flex",flexWrap:"wrap",alignContent:"center",justifyContent:"center",transform:"rotate(-22deg)",overflow:"hidden"}}>
+                        {Array.from({length:5}).map((_,i)=>(
+                          <span key={i} style={{flex:"0 0 100%",textAlign:"center",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1,color:"rgba(120,120,120,0.30)",textShadow:"0 1px 1px rgba(255,255,255,0.25)",lineHeight:2.2,whiteSpace:"nowrap",userSelect:"none"}}>To A "T" Boutique</span>
+                        ))}
+                      </div>
+                    </div>
                   : <ShirtSVG color={SHIRT_COLORS[0]} design={d} size={120}/>}
                 <div style={{fontSize:13,fontWeight:700,color:B.text,marginTop:6}}>{d.name}</div>
                 {d.isUpload && <div style={{fontSize:11,color:B.green,marginTop:2}}>📤 Upload your image</div>}
