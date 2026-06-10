@@ -386,7 +386,7 @@ function ShirtSVG({color=SHIRT_COLORS[0], design, uploadImg, shirtStyle="no-pock
   const isPocket = shirtStyle === "pocket";
   // Pocket = upper RIGHT chest; Full = center chest
   const cLeft  = isPocket ? size * 0.55 : size * 0.20;
-  const cTop   = isPocket ? imgH * 0.18  : imgH * 0.31;
+  const cTop   = isPocket ? imgH * 0.18  : imgH * 0.38;
   const cW     = isPocket ? size * 0.28  : size * 0.60;
   const cH     = isPocket ? imgH * 0.16  : imgH * 0.30;
 
@@ -1319,7 +1319,14 @@ function Storefront({cats, addOrder, customers, show}) {
               <div key={c.id} onClick={()=>{setCat(c);setStep(2);}} style={{background:"#fff",borderRadius:16,padding:"20px 14px",textAlign:"center",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.07)",border:"2px solid transparent",transition:"all .2s"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=B.green;e.currentTarget.style.transform="translateY(-3px)";}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.transform="";}}>
-                <div style={{fontSize:34,marginBottom:8}}>{c.emoji}</div>
+                {(() => {
+                  const cover = (c.designs||[]).find(d=>d.thumb_url||d.image_url);
+                  return cover
+                    ? <div style={{height:72,marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <img src={cover.thumb_url||cover.image_url} alt={c.name} loading="lazy" style={{maxHeight:72,maxWidth:"100%",objectFit:"contain"}}/>
+                      </div>
+                    : <div style={{fontSize:34,marginBottom:8}}>{c.emoji}</div>;
+                })()}
                 <div style={{fontSize:13,fontWeight:700,color:B.text}}>{c.name}</div>
                 <div style={{fontSize:11,color:B.textLt,marginTop:3}}>{c.designs.length} design{c.designs.length!==1?"s":""}</div>
               </div>
