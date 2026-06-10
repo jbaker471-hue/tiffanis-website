@@ -1245,7 +1245,10 @@ function Storefront({cats, addOrder, customers, show}) {
 
   const shirtTotal = cart.reduce((s,l)=>s+l.items.reduce((a,i)=>a+getPrice(l.productId,i.size)*i.qty,0),0);
   const shipCost   = delivery==="Ship" ? 8 : 0;
-  const grandTotal = shirtTotal + shipCost;
+  // Reward = one free shirt: discount equals the single highest-priced shirt in the cart.
+  const allShirtPrices = cart.flatMap(l=>l.items.flatMap(i=>Array(i.qty).fill(getPrice(l.productId,i.size))));
+  const rewardDiscount = (useReward && allShirtPrices.length>0) ? Math.max(...allShirtPrices) : 0;
+  const grandTotal = Math.max(0, shirtTotal + shipCost - rewardDiscount);
 
   const submit = async () => {
     if(cart.length===0){show("Your cart is empty","err");return;}
@@ -1283,6 +1286,7 @@ function Storefront({cats, addOrder, customers, show}) {
           items: orderItems,
           delivery,
           shippingAddress: shippingFull,
+          rewardDiscount: rewardDiscount,
           orderData: {
             customerName: cust.name,
             phone: cust.phone,
@@ -1710,10 +1714,10 @@ function Storefront({cats, addOrder, customers, show}) {
                   <span>$8.00</span>
                 </div>
               )}
-              {useReward && (
+              {useReward && rewardDiscount>0 && (
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4,color:"#FFD700"}}>
-                  <span>🎁 Reward Applied</span>
-                  <span>Mention at order</span>
+                  <span>🎁 Free shirt reward</span>
+                  <span>−${rewardDiscount}</span>
                 </div>
               )}
               <div style={{borderTop:"1px solid rgba(255,255,255,0.3)",paddingTop:8,marginTop:4,display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:700}}>
