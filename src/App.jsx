@@ -386,7 +386,7 @@ function ShirtSVG({color=SHIRT_COLORS[0], design, uploadImg, shirtStyle="no-pock
   const isPocket = shirtStyle === "pocket";
   // Pocket = upper RIGHT chest; Full = center chest
   const cLeft  = isPocket ? size * 0.55 : size * 0.20;
-  const cTop   = isPocket ? imgH * 0.18  : imgH * 0.38;
+  const cTop   = isPocket ? imgH * 0.18  : imgH * 0.34;
   const cW     = isPocket ? size * 0.28  : size * 0.60;
   const cH     = isPocket ? imgH * 0.16  : imgH * 0.30;
 
