@@ -237,6 +237,33 @@ const db = {
       return Array.isArray(data) ? data : [];
     } catch(e) { console.error(`DB get ${table} error:`, e); return []; }
   },
+  // Fetches ALL rows using range pagination (Supabase caps each request at 1000).
+  // `select` lets us pull only the columns we need to keep it light.
+  async getAll(table, select="*") {
+    const pageSize = 1000;
+    let from = 0;
+    let all = [];
+    try {
+      while (true) {
+        const res = await fetch(`${SUPA_URL}/rest/v1/${table}?select=${select}`, {
+          headers: {
+            apikey: SUPA_KEY,
+            Authorization: `Bearer ${SUPA_KEY}`,
+            "Content-Type": "application/json",
+            Range: `${from}-${from + pageSize - 1}`,
+            "Range-Unit": "items",
+          }
+        });
+        if (!res.ok) { console.error(`DB getAll ${table} failed:`, res.status, await res.text()); break; }
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < pageSize) break; // last page
+        from += pageSize;
+      }
+    } catch(e) { console.error(`DB getAll ${table} error:`, e); }
+    return all;
+  },
   async insert(table, row) {
     try {
       const res = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
@@ -438,7 +465,7 @@ function ShirtSVG({color=SHIRT_COLORS[0], design, uploadImg, shirtStyle="no-pock
         gap:1, pointerEvents:"none", zIndex:3,
       }}>
         {isUp && uploadImg && (
-          <img src={uploadImg} alt="design" style={{maxWidth:"100%", maxHeight:"100%", objectFit:"contain", filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.3))"}}/>
+          <img src={uploadImg} alt={design?.name||"Your design"} style={{maxWidth:"100%", maxHeight:"100%", objectFit:"contain", filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.3))"}}/>
         )}
         {isUp && !uploadImg && (
           <div style={{border:"2px dashed rgba(0,0,0,0.25)", borderRadius:6, padding:"6px", textAlign:"center", background:"rgba(255,255,255,0.4)", width:"90%"}}>
@@ -1092,7 +1119,7 @@ function Storefront({cats, addOrder, customers, show}) {
   // Designs synced from Google Drive (Supabase `designs` table), grouped by category
   const [syncedByCat,setSyncedByCat] = useState({});
   useEffect(()=>{
-    db.get("designs").then(rows=>{
+    db.getAll("designs","drive_id,name,category,image_url,thumb_url,active").then(rows=>{
       const grouped = {};
       (rows||[]).filter(d=>d.active!==false).forEach(d=>{
         const cn = (d.category||"Other").trim();
@@ -1165,7 +1192,7 @@ function Storefront({cats, addOrder, customers, show}) {
       id: Date.now()+"-"+Math.random().toString(36).slice(2,7),
       designName: design?.isUpload ? "Custom Upload" : design?.name,
       isUpload: !!design?.isUpload,
-      uploadImg: uploadImg || design?.image_url || null,
+      uploadImg: uploadImg || design?.thumb_url || design?.image_url || null,
       productId, productName: product.name,
       colorName: color.name, colorHex: color.hex,
       shirtStyle,
@@ -1332,7 +1359,7 @@ function Storefront({cats, addOrder, customers, show}) {
             {/* Preview */}
             <div style={{background:"#fff",borderRadius:20,padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.08)",textAlign:"center",position:"sticky",top:80}}>
               <div style={{fontSize:10,color:B.textLt,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Live Preview</div>
-              <ShirtSVG color={color} design={design} uploadImg={uploadImg || design?.image_url} shirtStyle={shirtStyle} size={260}/>
+              <ShirtSVG color={color} design={design} uploadImg={uploadImg || design?.thumb_url || design?.image_url} shirtStyle={shirtStyle} size={260}/>
               <div style={{marginTop:8,fontSize:12,color:B.textLt}}>{color.name} · {design.name}</div>
             </div>
             {/* Controls */}
