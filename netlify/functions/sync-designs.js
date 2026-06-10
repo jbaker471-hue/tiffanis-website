@@ -88,9 +88,9 @@ exports.handler = async () => {
             drive_id: f.id,
             name: f.name.replace(/\.(png|jpe?g)$/i, ""),
             category: folder.name,
-            // Public Drive view/thumbnail endpoints. The files (or the parent
-            // folder) must be shared as "Anyone with the link can view".
-            image_url: `https://drive.google.com/uc?export=view&id=${f.id}`,
+            // Drive's thumbnail endpoint is far more reliable for hotlinking
+            // than the uc?export=view URL. w800 looks crisp on the shirt preview.
+            image_url: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`,
             thumb_url: `https://drive.google.com/thumbnail?id=${f.id}&sz=w400`,
             mime_type: f.mimeType,
             active: true,
