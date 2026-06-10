@@ -12,7 +12,7 @@ exports.handler = async (event) => {
   };
 
   try {
-    const { items, delivery, shippingAddress, orderData } = JSON.parse(event.body);
+    const { items, delivery, shippingAddress, orderData, rewardDiscount } = JSON.parse(event.body);
 
     // Build line items from order
     const lineItems = items.map(item => ({
@@ -42,10 +42,25 @@ exports.handler = async (event) => {
       });
     }
 
+    // Loyalty reward: apply as a one-time Stripe coupon for the free-shirt value.
+    // (Stripe doesn't allow negative line items, so a coupon is the correct way.)
+    let discounts;
+    const discountCents = Math.round(Number(rewardDiscount || 0) * 100);
+    if (discountCents > 0) {
+      const coupon = await stripe.coupons.create({
+        amount_off: discountCents,
+        currency: "usd",
+        duration: "once",
+        name: "Loyalty Free Shirt",
+      });
+      discounts = [{ coupon: coupon.id }];
+    }
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: lineItems,
       mode: "payment",
+      discounts: discounts,
       success_url: `${process.env.URL}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.URL}?payment=cancelled`,
       customer_email: orderData.email || undefined,
@@ -60,6 +75,7 @@ exports.handler = async (event) => {
         placement: orderData.placement || "",
         items: JSON.stringify(items),
         using_reward: orderData.usingReward ? "true" : "false",
+        reward_discount: discountCents > 0 ? String(rewardDiscount) : "0",
       },
       billing_address_collection: "auto",
       shipping_address_collection: delivery === "Ship" ? {
