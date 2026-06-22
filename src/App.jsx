@@ -1140,7 +1140,14 @@ function Storefront({cats, addOrder, customers, show}) {
   const [cust,setCust]           = useState({name:"",phone:"",notes:""});
   const [loyRec,setLoyRec]       = useState(null);
   const [useReward,setUseReward] = useState(false);
-  const [cart,setCart]           = useState([]); // array of configured design lines
+  // Cart persists across refreshes/redeploys via localStorage so it's never lost.
+  const [cart,setCart]           = useState(()=>{
+    try { const saved = localStorage.getItem("tatb_cart"); return saved ? JSON.parse(saved) : []; }
+    catch { return []; }
+  }); // array of configured design lines
+  useEffect(()=>{
+    try { localStorage.setItem("tatb_cart", JSON.stringify(cart)); } catch {}
+  },[cart]);
   const fileRef                  = useRef();
 
   // When age group changes, default to the first product in that group
@@ -1266,7 +1273,7 @@ function Storefront({cats, addOrder, customers, show}) {
   return (
     <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 16px"}}>
       {/* Cart bar — visible whenever there are items, except on Done */}
-      {cart.length>0 && step!==7 && step!==5 && (
+      {cart.length>0 && step!==5 && (
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
           <button onClick={()=>setStep(5)} style={{display:"flex",alignItems:"center",gap:8,background:B.green,color:"#fff",border:"none",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:700,fontSize:13,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
             🛒 Cart ({cartQty}) · ${cartTotal}
