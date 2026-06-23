@@ -1292,13 +1292,22 @@ function Storefront({cats, addOrder, customers, show}) {
 
   return (
     <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 16px"}}>
-      {/* Cart bar — always available so customers can view the cart anytime */}
+      {/* Floating cart button — pinned to screen, reachable anytime while ordering */}
       {step!==5 && step!==7 && (
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
-          <button onClick={()=>setStep(5)} style={{display:"flex",alignItems:"center",gap:8,background:cart.length>0?B.green:"#fff",color:cart.length>0?"#fff":B.green,border:cart.length>0?"none":`2px solid ${B.green}`,borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:700,fontSize:13,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
-            {cart.length>0 ? `🛒 Cart (${cartQty}) · $${cartTotal}` : "🛒 View Cart"}
-          </button>
-        </div>
+        <button onClick={()=>setStep(5)} style={{
+          position:"fixed", bottom:20, right:20, zIndex:1000,
+          display:"flex", alignItems:"center", gap:8,
+          background:cart.length>0?B.green:"#fff", color:cart.length>0?"#fff":B.green,
+          border:cart.length>0?"none":`2px solid ${B.green}`,
+          borderRadius:30, padding:"13px 20px", cursor:"pointer",
+          fontFamily:"'Trebuchet MS',sans-serif", fontWeight:700, fontSize:14,
+          boxShadow:"0 4px 16px rgba(0,0,0,0.22)",
+          transition:"transform .15s, box-shadow .15s",
+        }}
+          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.28)";}}
+          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.22)";}}>
+          {cart.length>0 ? `🛒 Cart (${cartQty}) · $${cartTotal}` : "🛒 View Cart"}
+        </button>
       )}
       {step<5 && (
         <div style={{marginBottom:24}}>
