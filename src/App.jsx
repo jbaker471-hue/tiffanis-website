@@ -1295,7 +1295,7 @@ function Storefront({cats, addOrder, customers, show}) {
       {/* Floating cart button — pinned to screen, reachable anytime while ordering */}
       {step!==5 && step!==7 && (
         <button onClick={()=>setStep(5)} style={{
-          position:"fixed", bottom:20, right:20, zIndex:1000,
+          position:"fixed", bottom:20, left:20, zIndex:1000,
           display:"flex", alignItems:"center", gap:8,
           background:cart.length>0?B.green:"#fff", color:cart.length>0?"#fff":B.green,
           border:cart.length>0?"none":`2px solid ${B.green}`,
