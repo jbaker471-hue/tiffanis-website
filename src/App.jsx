@@ -184,8 +184,6 @@ const FB_URL = "https://m.me/toatsublimationboutique";
 const DEFAULT_CATS = [
   {id:"custom",name:"Custom Design",emoji:"📤",designs:[
     {id:"u1",name:"Upload My Image",emoji:"🖼️",preview:"",style:"upload",isUpload:true},
-    {id:"u2",name:"Screenshot / Inspo",emoji:"📸",preview:"",style:"upload",isUpload:true},
-    {id:"u3",name:"Logo or Artwork",emoji:"🎨",preview:"",style:"upload",isUpload:true},
   ]},
 ];
 
@@ -379,7 +377,7 @@ function ShirtSVG({color=SHIRT_COLORS[0], design, uploadImg, productId="", size=
   // Hoodie artwork sits slightly right-of-center in its source image; nudge to compensate
   const hOffset = isHoodie ? size * 0.015 : 0;
   const cLeft  = (size - cW) / 2 + hOffset; // horizontally centered on the garment
-  const cTop   = imgH * 0.30;               // lowered onto the chest (was too high)
+  const cTop   = imgH * 0.34;               // lowered onto the chest (was too high)
 
   const maxLen = Math.max(...lines.map(l=>l.length), 1);
   const fSize  = Math.max(7, Math.min(20, cW / maxLen * 1.5));
@@ -444,7 +442,25 @@ function ShirtSVG({color=SHIRT_COLORS[0], design, uploadImg, productId="", size=
         gap:1, pointerEvents:"none", zIndex:3,
       }}>
         {isUp && uploadImg && (
-          <img src={uploadImg} alt={design?.name||"Your design"} style={{maxWidth:"100%", maxHeight:"100%", objectFit:"contain", filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.3))"}}/>
+          <div style={{position:"relative", width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center"}}>
+            <img src={uploadImg} alt={design?.name||"Your design"} style={{maxWidth:"100%", maxHeight:"100%", objectFit:"contain", filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.3))"}}/>
+            <div aria-hidden="true" style={{
+              position:"absolute", inset:0, pointerEvents:"none",
+              display:"flex", flexWrap:"wrap", alignContent:"center", justifyContent:"center",
+              transform:"rotate(-22deg)", overflow:"hidden",
+            }}>
+              {Array.from({length:9}).map((_,i)=>(
+                <span key={i} style={{
+                  flex:"0 0 100%", textAlign:"center",
+                  fontFamily:"'Trebuchet MS',sans-serif", fontWeight:700,
+                  fontSize:Math.max(7, size*0.045), letterSpacing:1,
+                  color:"rgba(120,120,120,0.32)",
+                  textShadow:"0 1px 1px rgba(255,255,255,0.25)",
+                  lineHeight:1.9, whiteSpace:"nowrap", userSelect:"none",
+                }}>To A "T" Boutique</span>
+              ))}
+            </div>
+          </div>
         )}
         {isUp && !uploadImg && (
           <div style={{border:"2px dashed rgba(0,0,0,0.25)", borderRadius:6, padding:"6px", textAlign:"center", background:"rgba(255,255,255,0.4)", width:"90%"}}>
@@ -528,7 +544,7 @@ function SecHead({children}) { return <div style={{fontSize:11,letterSpacing:2,t
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [view, setView]           = useState("home");
-  const [cats, setCats]           = useState(() => store.get("tatb_cats_v2", DEFAULT_CATS));
+  const [cats, setCats]           = useState(() => store.get("tatb_cats_v3", DEFAULT_CATS));
   const [orders, setOrders]       = useState([]);
   const [customers, setCustomers] = useState([]);
   const [messages, setMessages]   = useState([]);
@@ -537,7 +553,7 @@ export default function App() {
   const {t, show}                 = useToast();
 
   // Keep categories in localStorage (admin config)
-  useEffect(()=>{ store.set("tatb_cats_v2",cats); },[cats]);
+  useEffect(()=>{ store.set("tatb_cats_v3",cats); },[cats]);
 
   // Handle Stripe redirect back
   useEffect(()=>{
@@ -1208,7 +1224,10 @@ function Storefront({cats, addOrder, customers, show}) {
 
   const shirtTotal = cart.reduce((s,l)=>s+l.items.reduce((a,i)=>a+getPrice(l.productId,i.size)*i.qty,0),0);
   const shipCost   = delivery==="Ship" ? 8 : 0;
-  const grandTotal = shirtTotal + shipCost;
+  // Reward = one free shirt: discount equals the single highest-priced shirt in the cart.
+  const allShirtPrices = cart.flatMap(l=>l.items.flatMap(i=>Array(i.qty).fill(getPrice(l.productId,i.size))));
+  const rewardDiscount = (useReward && allShirtPrices.length>0) ? Math.max(...allShirtPrices) : 0;
+  const grandTotal = Math.max(0, shirtTotal + shipCost - rewardDiscount);
 
   const submit = async () => {
     if(cart.length===0){show("Your cart is empty","err");return;}
@@ -1245,6 +1264,7 @@ function Storefront({cats, addOrder, customers, show}) {
           items: orderItems,
           delivery,
           shippingAddress: shippingFull,
+          rewardDiscount: rewardDiscount,
           orderData: {
             customerName: cust.name,
             phone: cust.phone,
@@ -1272,11 +1292,11 @@ function Storefront({cats, addOrder, customers, show}) {
 
   return (
     <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 16px"}}>
-      {/* Cart bar — visible whenever there are items, except on Done */}
-      {cart.length>0 && step!==5 && (
+      {/* Cart bar — always available so customers can view the cart anytime */}
+      {step!==5 && step!==7 && (
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
-          <button onClick={()=>setStep(5)} style={{display:"flex",alignItems:"center",gap:8,background:B.green,color:"#fff",border:"none",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:700,fontSize:13,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
-            🛒 Cart ({cartQty}) · ${cartTotal}
+          <button onClick={()=>setStep(5)} style={{display:"flex",alignItems:"center",gap:8,background:cart.length>0?B.green:"#fff",color:cart.length>0?"#fff":B.green,border:cart.length>0?"none":`2px solid ${B.green}`,borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:700,fontSize:13,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
+            {cart.length>0 ? `🛒 Cart (${cartQty}) · $${cartTotal}` : "🛒 View Cart"}
           </button>
         </div>
       )}
@@ -1328,7 +1348,14 @@ function Storefront({cats, addOrder, customers, show}) {
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=B.green;e.currentTarget.style.transform="translateY(-2px)";}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.transform="";}}>
                 {d.image_url
-                  ? <div style={{height:120,display:"flex",alignItems:"center",justifyContent:"center"}}><img src={d.thumb_url||d.image_url} alt={d.name} loading="lazy" style={{maxHeight:120,maxWidth:"100%",objectFit:"contain"}}/></div>
+                  ? <div style={{height:120,position:"relative",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                      <img src={d.thumb_url||d.image_url} alt={d.name} loading="lazy" style={{maxHeight:120,maxWidth:"100%",objectFit:"contain"}}/>
+                      <div aria-hidden="true" style={{position:"absolute",inset:0,pointerEvents:"none",display:"flex",flexWrap:"wrap",alignContent:"center",justifyContent:"center",transform:"rotate(-22deg)",overflow:"hidden"}}>
+                        {Array.from({length:5}).map((_,i)=>(
+                          <span key={i} style={{flex:"0 0 100%",textAlign:"center",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:700,fontSize:11,letterSpacing:1,color:"rgba(120,120,120,0.30)",textShadow:"0 1px 1px rgba(255,255,255,0.25)",lineHeight:2.2,whiteSpace:"nowrap",userSelect:"none"}}>To A "T" Boutique</span>
+                        ))}
+                      </div>
+                    </div>
                   : <ShirtSVG color={SHIRT_COLORS[0]} design={d} size={120}/>}
                 <div style={{fontSize:13,fontWeight:700,color:B.text,marginTop:6}}>{d.name}</div>
                 {d.isUpload && <div style={{fontSize:11,color:B.green,marginTop:2}}>📤 Upload your image</div>}
@@ -1521,7 +1548,7 @@ function Storefront({cats, addOrder, customers, show}) {
       {/* STEP 5 — Cart */}
       {step===5 && (
         <div style={{animation:"fup .4s ease",maxWidth:680,margin:"0 auto"}}>
-          <button onClick={()=>{resetDesign();setStep(1);}} style={BBTN}>← Add Another Design</button>
+          <button onClick={()=>{resetDesign();setStep(1);}} style={BBTN}>← {cart.length>0?"Add Another Design":"Browse Designs"}</button>
           <h2 style={{fontSize:26,color:B.text,marginBottom:6,fontFamily:"'Dancing Script','Georgia',cursive"}}>Your Cart</h2>
           {cart.length===0 ? (
             <div style={{textAlign:"center",padding:"40px 20px",color:B.textLt}}>
@@ -1644,10 +1671,10 @@ function Storefront({cats, addOrder, customers, show}) {
                   <span>$8.00</span>
                 </div>
               )}
-              {useReward && (
+              {useReward && rewardDiscount>0 && (
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4,color:"#FFD700"}}>
-                  <span>🎁 Reward Applied</span>
-                  <span>Mention at order</span>
+                  <span>🎁 Free shirt reward</span>
+                  <span>−${rewardDiscount}</span>
                 </div>
               )}
               <div style={{borderTop:"1px solid rgba(255,255,255,0.3)",paddingTop:8,marginTop:4,display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:700}}>
