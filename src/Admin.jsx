@@ -4,6 +4,7 @@
 // actually opens the Admin tab.
 import { useState, useEffect, useRef } from "react";
 import { B, INP, PBTN, Lbl, PAYMENT_OPTS, STATUSES, STATUS_META, SHIRTS_FOR_REWARD, admin, rewardCode, pi } from "./shared.jsx";
+import { availableRewards } from "./loyalty.js";
 
 export function Tracker({orders, setOrders, customers, setCustomers, adminPassword, show, embedded=false}) {
   const [openId,setOpenId]   = useState(null);
@@ -430,7 +431,7 @@ export function Admin({cats, setCats, orders, setOrders, customers, setCustomers
           {filteredCusts.length===0
             ? <div style={{textAlign:"center",padding:"28px",color:B.textLt}}>No customers yet</div>
             : filteredCusts.sort((a,b)=>(b.total_shirts||0)-(a.total_shirts||0)).map(c=>{
-                const avail=(c.earned_rewards||0)-(c.redeemed_rewards||0);
+                const avail=availableRewards(c);
                 const prog=(c.total_shirts||0)%SHIRTS_FOR_REWARD;
                 return (
                   <div key={c.phone} style={{background:"#fff",borderRadius:14,padding:"14px",marginBottom:9,boxShadow:"0 2px 10px rgba(0,0,0,0.07)",borderLeft:`4px solid ${avail>0?"#DAA520":B.green}`}}>

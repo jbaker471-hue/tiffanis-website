@@ -27,6 +27,12 @@ function realPriceFor(item) {
   return BIG_SIZES.includes(item.size) ? entry.big : entry.base;
 }
 
+// Exported for test/price-consistency.test.js, which checks this table
+// against src/pricing.js so the two can't silently drift apart.
+module.exports.PRICE_TABLE = PRICE_TABLE;
+module.exports.BIG_SIZES = BIG_SIZES;
+module.exports.realPriceFor = realPriceFor;
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };

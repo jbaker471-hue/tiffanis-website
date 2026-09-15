@@ -1,6 +1,8 @@
 // To A "T" Boutique — Full System v1.0 (clean build)
 import { useState, useEffect, useCallback, useRef, useMemo, useId, lazy, Suspense } from "react";
 import { B, INP, PBTN, Lbl, STATUS_META, SHIRTS_FOR_REWARD, admin, rewardCode, pi } from "./shared.jsx";
+import { ADULT_SIZES, YOUTH_SIZES, BIG_SIZES, SIZES, CATALOG, PRODUCTS, DEFAULT_PRODUCT_ID, getProduct, getSizesForBrand, getPrice, calcTotal } from "./pricing.js";
+import { availableRewards } from "./loyalty.js";
 
 // Admin.jsx (order tracker, designs/AI-sort/loyalty/messages/stats tabs) is
 // only ever needed by whoever opens the Admin tab — almost never a
@@ -59,98 +61,6 @@ const BRAND_COLORS = {
 const SHIRT_COLORS = BRAND_COLORS.comfort;
 
 // Size sets
-const ADULT_SIZES = ["XS","S","M","L","XL","2XL","3XL","4XL","5XL"];
-const YOUTH_SIZES = ["YXS","YS","YM","YL","YXL"];
-const BIG_SIZES   = ["2XL","3XL","4XL","5XL"]; // adult upcharge sizes
-const SIZES = [...YOUTH_SIZES, ...ADULT_SIZES];
-
-// ─── PRODUCT CATALOG: Age group → Brand → Style ────────────────────────────────
-// Each "style" is a sellable product. id is globally unique so the rest of the
-// app (orders, pricing, colors) can reference a single flat key.
-const CATALOG = {
-  adult: {
-    label: "Adult",
-    sizes: ADULT_SIZES,
-    brands: [
-      {
-        id:"gildan", name:"Gildan", colorKey:"gildan",
-        styles:[
-          { id:"gildan_ss",    label:"Short Sleeve", desc:"S–XL $17 · 2XL–5XL $20", basePrice:17, bigPrice:20 },
-          { id:"gildan_ls",    label:"Long Sleeve",  desc:"S–XL $20 · 2XL–5XL $25", basePrice:20, bigPrice:25 },
-          { id:"gildan_sweat", label:"Sweatshirt",   desc:"S–XL $25 · 2XL–5XL $30", basePrice:25, bigPrice:30 },
-          { id:"gildan_hoodie",label:"Hoodie",       desc:"S–XL $30 · 2XL–5XL $35", basePrice:30, bigPrice:35 },
-        ],
-      },
-      {
-        id:"bella", name:"Bella+Canvas", colorKey:"bella",
-        styles:[
-          { id:"bella_ss",     label:"Short Sleeve", desc:"Soft tri-blend, fitted · S–XL $20 · 2XL+ $25", basePrice:20, bigPrice:25 },
-        ],
-      },
-      {
-        id:"comfort", name:"Comfort Colors", colorKey:"comfort",
-        styles:[
-          { id:"comfort_ss",   label:"Short Sleeve", desc:"Pigment-dyed, vintage feel · S–XL $20 · 2XL+ $25", basePrice:20, bigPrice:25 },
-        ],
-      },
-    ],
-  },
-  child: {
-    label: "Children",
-    sizes: YOUTH_SIZES,
-    brands: [
-      {
-        id:"bella", name:"Bella+Canvas", colorKey:"bella",
-        styles:[ { id:"child_bella", label:"Youth Tee", desc:"Youth XS–XL · $13", basePrice:13, bigPrice:13 } ],
-      },
-      {
-        id:"rabbitskins", name:"Rabbit Skins", colorKey:"gildan",
-        styles:[ { id:"child_rabbit", label:"Youth Tee", desc:"Youth XS–XL · $13", basePrice:13, bigPrice:13 } ],
-      },
-      {
-        id:"gildan", name:"Gildan", colorKey:"gildan",
-        styles:[ { id:"child_gildan", label:"Youth Tee", desc:"Youth XS–XL · $13", basePrice:13, bigPrice:13 } ],
-      },
-      {
-        id:"comfort", name:"Comfort Colors", colorKey:"comfort",
-        styles:[ { id:"child_comfort", label:"Youth Tee", desc:"Youth XS–XL · $13", basePrice:13, bigPrice:13 } ],
-      },
-    ],
-  },
-};
-
-// DTF print-only stays as a standalone option
-const DTF_ONLY = { id:"dtf_only", label:"DTF Print Only", desc:"Flat rate per print up to 12×15″ — shirt not included", basePrice:10, bigPrice:10, colorKey:"comfort" };
-
-// Flatten every style into a lookup keyed by its unique style id.
-const PRODUCTS = (() => {
-  const map = {};
-  Object.entries(CATALOG).forEach(([ageId, age]) => {
-    age.brands.forEach(brand => {
-      brand.styles.forEach(style => {
-        map[style.id] = {
-          ...style,
-          ageId,
-          sizes: age.sizes,
-          brandId: brand.id,
-          brandName: brand.name,
-          colorKey: brand.colorKey,
-          // Combined display name e.g. "Gildan Short Sleeve"
-          name: `${brand.name} ${style.label}`,
-        };
-      });
-    });
-  });
-  map[DTF_ONLY.id] = { ...DTF_ONLY, ageId:"adult", sizes:ADULT_SIZES, brandId:"dtf", brandName:"DTF", name:DTF_ONLY.label };
-  return map;
-})();
-
-const DEFAULT_PRODUCT_ID = "comfort_ss";
-
-function getProduct(productId) {
-  return PRODUCTS[productId] || PRODUCTS[DEFAULT_PRODUCT_ID];
-}
-
 // brandId here is a PRODUCT id (kept name for backward compat with callers)
 function getBrandColors(productId) {
   const p = PRODUCTS[productId];
@@ -158,22 +68,6 @@ function getBrandColors(productId) {
   return BRAND_COLORS[key] || BRAND_COLORS.comfort;
 }
 
-function getSizesForBrand(productId) {
-  const p = getProduct(productId);
-  return p.sizes;
-}
-
-function getPrice(productId, size) {
-  const p = getProduct(productId);
-  return BIG_SIZES.includes(size) ? p.bigPrice : p.basePrice;
-}
-
-function calcTotal(productId, items) {
-  return items.reduce((sum,i)=>{
-    const price = getPrice(productId, i.size);
-    return sum + (price * Number(i.qty||1));
-  },0);
-}
 const FB_USERNAME = "toatsublimationboutique";
 // Plain m.me link — confirmed (by testing it typed directly into Safari,
 // with no involvement from this site at all) that Facebook itself routes an
@@ -761,7 +655,7 @@ function Welcome({setView, show}) {
     }
   };
 
-  const avail = rec ? (rec.earned_rewards||0) - (rec.redeemed_rewards||0) : 0;
+  const avail = availableRewards(rec);
 
   return (
     <div style={{maxWidth:820, margin:"0 auto", padding:"24px 16px"}}>
@@ -951,7 +845,7 @@ function OrderStatus({show}) {
             <div style={{background:`linear-gradient(135deg,${B.greenDk},${B.green})`, borderRadius:14, padding:"14px 16px", color:"#fff", marginBottom:16, display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8}}>
               <div>
                 <div style={{fontWeight:700, fontSize:16}}>Hi {rec.name||'there'}! 👋</div>
-                <div style={{fontSize:12, opacity:.8, marginTop:2}}>⭐ {rec.total_shirts||0} total shirts · {rec.earned_rewards||0-rec.redeemed_rewards||0 > 0 ? `🎁 ${rec.earned_rewards||0-rec.redeemed_rewards||0} reward${rec.earned_rewards||0-rec.redeemed_rewards||0>1?"s":""} available!`:"Keep going!"}</div>
+                <div style={{fontSize:12, opacity:.8, marginTop:2}}>⭐ {rec.total_shirts||0} total shirts · {availableRewards(rec) > 0 ? `🎁 ${availableRewards(rec)} reward${availableRewards(rec)>1?"s":""} available!`:"Keep going!"}</div>
               </div>
               <div style={{fontSize:13, opacity:.85}}>{myOrders.length} order{myOrders.length!==1?"s":""} found</div>
             </div>
@@ -1558,7 +1452,7 @@ function Storefront({cats, show}) {
               </div>
             </div>
             {/* Reward toggle */}
-            {loyRec && (loyRec.earned_rewards||0)-(loyRec.redeemed_rewards||0)>0 && (
+            {loyRec && availableRewards(loyRec)>0 && (
               <div style={{background:`linear-gradient(135deg,${B.greenDk},${B.green})`,borderRadius:12,padding:"14px",color:"#fff"}}>
                 <div style={{fontSize:13,fontWeight:700,color:"#FFD700",marginBottom:6}}>🎁 You have a free shirt!</div>
                 <div style={{fontSize:12,marginBottom:10,opacity:.9}}>Code: <span style={{fontFamily:"monospace",fontSize:15,color:"#FFD700",letterSpacing:2}}>{rewardCode(cust.phone)}</span></div>
@@ -1649,7 +1543,7 @@ function LoyaltyView({show}) {
     setLooked(true);
   };
 
-  const avail = rec ? rec.earned_rewards||0-rec.redeemed_rewards||0 : 0;
+  const avail = availableRewards(rec);
 
   return (
     <div style={{maxWidth:620,margin:"0 auto",padding:"32px 16px"}}>
