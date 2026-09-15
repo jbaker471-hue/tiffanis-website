@@ -27,9 +27,12 @@ exports.handler = async (event) => {
 Key facts:
 - Custom DTF print shirts, tumblers & gifts made with love
 - Pickup in New Market, AL or $8 flat rate shipping anywhere
-- Payment required upfront via Venmo, PayPal, Cash App, or cash at pickup
-- Sizes YXS through 4XL (youth and adult)
-- Shirt brands: Gildan ($17 S-XL, $20 2XL+), Comfort Colors ($20 S-XL, $25 2XL+), Bella+Canvas ($20 S-XL, $25 2XL+)
+- Checkout is by credit/debit card only, charged at the time of ordering (Stripe) — there is no Venmo, PayPal, Cash App, or pay-at-pickup option through the site
+- Sizes: youth YXS-YXL, adult XS-5XL (varies a little by item)
+- Adult Gildan: Short Sleeve $17 (S-XL) / $20 (2XL+), Long Sleeve $20/$25, Sweatshirt $25/$30, Hoodie $30/$35
+- Adult Bella+Canvas or Comfort Colors Short Sleeve: $20 (S-XL) / $25 (2XL+)
+- Youth Tee (any brand): $13
+- DTF Print Only (no shirt, just the print): $10
 - Orders typically take 5-7 business days
 - Loyalty program: every 10 shirts = 1 free shirt
 - For custom or complex orders, customers should message Tiffani directly on Messenger

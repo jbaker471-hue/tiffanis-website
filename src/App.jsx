@@ -195,9 +195,9 @@ const DEFAULT_CATS = [
 ];
 
 const FAQ = [
-  {q:"What sizes do you carry?", a:"Youth XS through adult 5XL! If you need something specific just ask."},
+  {q:"What sizes do you carry?", a:"Youth YXS through adult 5XL! If you need something specific just ask."},
   {q:"How much is shipping?",    a:"Flat $8 rate anywhere, or free pickup in New Market, AL!"},
-  {q:"How do I pay?",            a:"Venmo, PayPal, Cash App, or cash at pickup. Payment is required upfront before production starts."},
+  {q:"How do I pay?",            a:"Checkout is by credit or debit card, charged when you place your order."},
   {q:"How long does it take?",   a:"Most orders are ready in 5–7 business days. She'll let you know if yours is more complex!"},
   {q:"Can I change my order?",   a:"Changes can usually be made before production starts — message Tiffani on Messenger ASAP!"},
   {q:"Do you do group orders?",  a:"Absolutely! Family and group orders are a specialty. Message Tiffani for bulk pricing."},
@@ -1893,16 +1893,19 @@ function ContactView({messages, setMessages, show}) {
     }
 
     try {
-      const apiMessages = [
-        ...chatLog.filter(m=>m.role!=="bot").map(m=>({role:"user",content:m.text})),
-        ...chatLog.filter(m=>m.role==="bot" && chatLog.indexOf(m)>0).map(m=>({role:"assistant",content:m.text})),
-        {role:"user",content:question}
-      ].filter(m=>m.content);
+      // chatLog[0] is always the canned greeting, not a real turn — drop it,
+      // then keep the rest in order so the API sees an actual back-and-forth
+      // instead of just the latest question with no memory of the chat.
+      const apiMessages = chatLog
+        .slice(1)
+        .map(m=>({role: m.role==="bot" ? "assistant" : "user", content:m.text}))
+        .concat([{role:"user",content:question}])
+        .filter(m=>m.content);
 
       const res = await fetch("/.netlify/functions/chat",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ messages:[{role:"user",content:question}] })
+        body:JSON.stringify({ messages: apiMessages })
       });
       const data = await res.json();
       const reply = data.reply || "Sorry, I had trouble with that! Please message Tiffani directly on Messenger. 💬";
