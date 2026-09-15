@@ -179,7 +179,14 @@ const STATUS_META = {
   "Complete":   {bg:"#ECEFF1",color:"#37474F",dot:"#78909C"},
 };
 const SHIRTS_FOR_REWARD = 10;
-const FB_URL = "https://m.me/toatsublimationboutique";
+// Phones: m.me is Facebook's own link for opening the Messenger app directly
+// (falls back to the App/Play Store if it isn't installed). Desktop: m.me
+// tends to land on an odd interstitial, so send it straight to the
+// messenger.com web app instead.
+const FB_USERNAME = "toatsublimationboutique";
+const FB_URL = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+  ? `https://m.me/${FB_USERNAME}`
+  : `https://www.messenger.com/t/${FB_USERNAME}`;
 
 const DEFAULT_CATS = [
   {id:"custom",name:"Custom Design",emoji:"📤",designs:[
