@@ -133,6 +133,7 @@ exports.handler = async (event) => {
       metadata: {
         customer_name: orderData.customerName || "",
         phone: orderData.phone || "",
+        email: orderData.email || "",
         delivery: delivery || "Pickup",
         shipping_address: shippingAddress || "",
         notes: orderData.notes || "",

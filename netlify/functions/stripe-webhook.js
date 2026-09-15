@@ -25,6 +25,7 @@ exports.handler = async (event) => {
       const order = {
         customer_name: meta.customer_name || "Unknown",
         phone: meta.phone || "",
+        email: meta.email || "",
         delivery: meta.delivery || "Pickup",
         brand: meta.brand || "",
         shirt_style: meta.shirt_style || "no-pocket",
