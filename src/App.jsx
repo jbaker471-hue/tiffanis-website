@@ -180,32 +180,17 @@ const STATUS_META = {
 };
 const SHIRTS_FOR_REWARD = 10;
 const FB_USERNAME = "toatsublimationboutique";
-const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-// Desktop: m.me tends to land on an odd interstitial, so send it straight
-// to the messenger.com web app instead. This is also the href used as a
-// plain fallback on mobile for anyone without JS or without the app.
-const FB_URL = IS_MOBILE
+// Plain m.me link. On iOS this first lands on a facebook.com interstitial
+// with an "Open In Messenger" link rather than switching to the app
+// instantly — that extra tap is Facebook's own fallback UI and it does
+// correctly deep-link into the actual chat with the page from there.
+// (Tried forcing the bare fb-messenger:// scheme directly — worse: it opens
+// the app to the general inbox, not the chat with this page, since the
+// scheme alone carries no destination, and adds its own permission prompt
+// on top. Reverted.)
+const FB_URL = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
   ? `https://m.me/${FB_USERNAME}`
   : `https://www.messenger.com/t/${FB_USERNAME}`;
-
-// On mobile, m.me *should* hand off to the installed Messenger app on its
-// own, but that hand-off can get swallowed by an in-app browser (opened the
-// site from an Instagram/TikTok/etc. link) or a user's "open links in
-// browser" setting for the app. Forcing the native fb-messenger:// scheme
-// first is more reliable when the app really is installed; if nothing
-// happens (app not installed, or the scheme is blocked), fall back to the
-// normal m.me link after a beat.
-function openMessenger(e) {
-  if (!IS_MOBILE) return; // let the plain <a href={FB_URL}> handle desktop
-  e.preventDefault();
-  const start = Date.now();
-  window.location.href = "fb-messenger://";
-  setTimeout(() => {
-    if (document.visibilityState === "visible" && Date.now() - start < 2000) {
-      window.location.href = FB_URL;
-    }
-  }, 1200);
-}
 
 const DEFAULT_CATS = [
   {id:"custom",name:"Custom Design",emoji:"📤",designs:[
@@ -708,7 +693,7 @@ function MessengerBubble() {
           <div style={{fontSize:12,color:"#555",fontFamily:"'Trebuchet MS',sans-serif",lineHeight:1.5}}>
             Hi! 👋 Have a question about a custom order? Message Tiffani directly!
           </div>
-          <a href={FB_URL} onClick={e=>{openMessenger(e); dismiss();}} style={{
+          <a href={FB_URL} onClick={dismiss} style={{
             display:"block", marginTop:10, textAlign:"center",
             background:"linear-gradient(135deg,#0084FF,#0052CC)",
             color:"#fff", borderRadius:10, padding:"8px",
@@ -750,7 +735,7 @@ function MessengerBubble() {
               </div>
               <div style={{fontSize:10,color:"#888",marginTop:4,fontFamily:"'Trebuchet MS',sans-serif"}}>Tiffani · To A "T" Boutique</div>
             </div>
-            <a href={FB_URL} onClick={openMessenger} style={{
+            <a href={FB_URL} style={{
               display:"flex", alignItems:"center", justifyContent:"center", gap:8,
               background:"linear-gradient(135deg,#0084FF,#0052CC)",
               color:"#fff", borderRadius:12, padding:"12px",
@@ -928,7 +913,7 @@ function Welcome({setView, show}) {
           </div>
         ))}
         <div style={{display:"flex", gap:10, marginTop:14}}>
-          <a href={FB_URL} onClick={openMessenger} style={{flex:1, display:"block", padding:"11px", borderRadius:12, background:"#0084FF", color:"#fff", textAlign:"center", fontWeight:700, fontSize:13, textDecoration:"none", fontFamily:"'Trebuchet MS',sans-serif"}}>
+          <a href={FB_URL} style={{flex:1, display:"block", padding:"11px", borderRadius:12, background:"#0084FF", color:"#fff", textAlign:"center", fontWeight:700, fontSize:13, textDecoration:"none", fontFamily:"'Trebuchet MS',sans-serif"}}>
             💬 Message on Facebook
           </a>
           <button onClick={()=>setView("contact")} style={{flex:1, padding:"11px", borderRadius:12, border:`2px solid ${B.green}`, background:"#fff", color:B.green, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"'Trebuchet MS',sans-serif"}}>
@@ -987,7 +972,7 @@ function OrderStatus({show}) {
           <div style={{fontSize:36, marginBottom:10}}>🔍</div>
           <div style={{fontWeight:600, color:B.text, marginBottom:6}}>No orders found</div>
           <div style={{fontSize:13, color:B.textLt, marginBottom:16}}>Double-check the phone number you used when ordering, or message Tiffani directly.</div>
-          <a href={FB_URL} onClick={openMessenger} style={{display:"inline-block", padding:"10px 22px", borderRadius:12, background:"#0084FF", color:"#fff", fontWeight:700, fontSize:13, textDecoration:"none", fontFamily:"'Trebuchet MS',sans-serif"}}>
+          <a href={FB_URL} style={{display:"inline-block", padding:"10px 22px", borderRadius:12, background:"#0084FF", color:"#fff", fontWeight:700, fontSize:13, textDecoration:"none", fontFamily:"'Trebuchet MS',sans-serif"}}>
             💬 Message on Facebook
           </a>
         </div>
@@ -1052,7 +1037,7 @@ function OrderStatus({show}) {
           })}
 
           <div style={{textAlign:"center", marginTop:4}}>
-            <a href={FB_URL} onClick={openMessenger} style={{display:"inline-block", padding:"11px 24px", borderRadius:12, background:"#0084FF", color:"#fff", fontWeight:700, fontSize:13, textDecoration:"none", fontFamily:"'Trebuchet MS',sans-serif"}}>
+            <a href={FB_URL} style={{display:"inline-block", padding:"11px 24px", borderRadius:12, background:"#0084FF", color:"#fff", fontWeight:700, fontSize:13, textDecoration:"none", fontFamily:"'Trebuchet MS',sans-serif"}}>
               💬 Questions? Message Tiffani
             </a>
           </div>
@@ -1966,7 +1951,7 @@ function ContactView({messages, setMessages, show}) {
         <div style={{fontSize:38,marginBottom:6}}>💬</div>
         <div style={{fontFamily:"'Dancing Script','Georgia',cursive",fontSize:24,color:"#fff",marginBottom:5}}>Chat with Tiffani</div>
         <div style={{fontSize:13,color:"rgba(255,255,255,0.88)",marginBottom:16,lineHeight:1.6}}>For custom designs, complex orders, or anything personal — message her directly on Facebook, or use the form below to leave your phone number and she'll call or text you back!</div>
-        <a href={FB_URL} onClick={openMessenger} style={{display:"inline-flex",alignItems:"center",gap:8,background:"#fff",color:"#0084FF",borderRadius:12,padding:"11px 24px",fontWeight:700,fontSize:15,textDecoration:"none",boxShadow:"0 4px 14px rgba(0,0,0,0.15)",fontFamily:"'Trebuchet MS',sans-serif"}}>
+        <a href={FB_URL} style={{display:"inline-flex",alignItems:"center",gap:8,background:"#fff",color:"#0084FF",borderRadius:12,padding:"11px 24px",fontWeight:700,fontSize:15,textDecoration:"none",boxShadow:"0 4px 14px rgba(0,0,0,0.15)",fontFamily:"'Trebuchet MS',sans-serif"}}>
           📱 Open Messenger
         </a>
       </div>
