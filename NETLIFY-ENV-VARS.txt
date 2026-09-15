@@ -7,10 +7,31 @@ Variable Name                   Where to find the value
 ------------------------------  --------------------------------
 VITE_SUPABASE_URL               Supabase → Settings → API → Project URL
 VITE_SUPABASE_ANON_KEY          Supabase → Settings → API → anon public key
+SUPABASE_SERVICE_KEY            Supabase → Settings → API → service_role key (mark Secret!)
+                                 Required — every admin/order/loyalty read and write now
+                                 goes through a Netlify function using this key, since the
+                                 anon key no longer has any access to orders/customers/
+                                 messages (see the RLS migration in supabase-setup.sql).
+
+ADMIN_PASSWORD                  Whatever password unlocks the Admin panel (mark Secret).
+                                 This replaced a password that used to be hardcoded in the
+                                 browser bundle, readable by anyone — it's now checked
+                                 server-side in netlify/functions/admin-data.js and
+                                 admin-mutate.js instead. Set this before deploying or the
+                                 Admin panel can't unlock at all. Change it any time by
+                                 updating this one env var — no code change needed.
 
 VITE_STRIPE_PUBLISHABLE_KEY     Stripe → Developers → API Keys → Publishable key
 STRIPE_SECRET_KEY               Stripe → Developers → API Keys → Secret key (mark Secret)
 STRIPE_WEBHOOK_SECRET           Stripe → Developers → Webhooks → endpoint → Signing secret (mark Secret)
+
+ANTHROPIC_API_KEY               console.anthropic.com → API Keys (mark Secret)
+                                 Powers the "AI Sort" admin feature and the Help-tab chatbot,
+                                 both via server-side functions (analyze-design.js, chat.js).
+
+── GOOGLE DRIVE DESIGN SYNC (see DRIVE-SYNC-SETUP.md) ────────
+GOOGLE_SERVICE_ACCOUNT_JSON      Service account credentials JSON, as one string (mark Secret)
+DRIVE_ROOT_FOLDER_ID             The Google Drive folder ID containing category subfolders
 
 ── EMAIL NOTIFICATIONS (add when ready) ─────────────────────
 RESEND_API_KEY                  resend.com → API Keys → Create API Key (mark Secret)

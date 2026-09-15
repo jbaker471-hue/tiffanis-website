@@ -48,7 +48,7 @@
 
 1. Open your Netlify URL
 2. Place a test order with your phone number
-3. Open the Admin panel (password: leo080693)
+3. Open the Admin panel (password: whatever you set ADMIN_PASSWORD to in Netlify)
 4. Check the Orders tab — your order should be there
 5. Open the site on a different device — order still there ✓
 
@@ -62,7 +62,10 @@ When you make changes to the code:
    OR connect GitHub for automatic deploys
 
 ## Admin Password
-leo080693
+Set by you, in Netlify → Site Settings → Environment Variables → ADMIN_PASSWORD.
+It's checked server-side now (not stored in the site's code), so you can
+change it any time by updating that one variable and redeploying — see
+NETLIFY-ENV-VARS.txt.
 
 ## Support
 - Supabase docs: https://supabase.com/docs

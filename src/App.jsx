@@ -200,17 +200,12 @@ const FAQ = [
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Public, read-only catalog data (the "designs" table) is the only thing
+// still fetched directly with the anon key — orders/customers/messages have
+// no anon policies at all anymore (see the RLS migration in
+// supabase-setup.sql), so every read/write on those goes through a Netlify
+// function using the service key instead.
 const db = {
-  async get(table) {
-    try {
-      const res = await fetch(`${SUPA_URL}/rest/v1/${table}?order=created_at.desc`, {
-        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json" }
-      });
-      if (!res.ok) { console.error(`DB get ${table} failed:`, res.status, await res.text()); return []; }
-      const data = await res.json();
-      return Array.isArray(data) ? data : [];
-    } catch(e) { console.error(`DB get ${table} error:`, e); return []; }
-  },
   // Fetches ALL rows using range pagination (Supabase caps each request at 1000).
   // `select` lets us pull only the columns we need to keep it light.
   async getAll(table, select="*") {
@@ -238,68 +233,48 @@ const db = {
     } catch(e) { console.error(`DB getAll ${table} error:`, e); }
     return all;
   },
-  async insert(table, row) {
-    try {
-      const res = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
-        method: "POST",
-        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
-        body: JSON.stringify(row)
-      });
-      if (!res.ok) { const txt = await res.text(); console.error(`DB insert ${table} failed:`, res.status, txt); return null; }
-      const data = await res.json();
-      return Array.isArray(data) ? data[0] : data;
-    } catch(e) { console.error(`DB insert ${table} error:`, e); return null; }
-  },
-  async update(table, id, changes) {
-    const res = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, {
-      method: "PATCH",
-      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
-      body: JSON.stringify(changes)
+};
+
+// Phone-scoped, public lookup (Track Order / Loyalty Rewards / checkout
+// reward preview) — returns only the one matching customer + their orders,
+// via a server function using the service key. Never the whole table.
+async function lookupCustomer(phone) {
+  try {
+    const res = await fetch("/.netlify/functions/lookup-customer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone }),
+    });
+    if (!res.ok) return { customer: null, orders: [] };
+    return await res.json();
+  } catch {
+    return { customer: null, orders: [] };
+  }
+}
+
+// Admin data/actions go through password-checked server functions rather
+// than the anon key, since the admin password is only ever checked in the
+// browser otherwise. The password is held in memory for the session and
+// sent with each call; the server re-checks it every time.
+const admin = {
+  async unlock(password) {
+    const res = await fetch("/.netlify/functions/admin-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
     });
     if (!res.ok) return null;
-    const data = await res.json();
-    return Array.isArray(data) ? data[0] : data;
+    return await res.json(); // { orders, customers, messages }
   },
-  async delete(table, id) {
-    await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, {
-      method: "DELETE",
-      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+  async mutate(password, table, op, id, changes) {
+    const res = await fetch("/.netlify/functions/admin-mutate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password, table, op, id, changes }),
     });
+    if (!res.ok) return null;
+    return await res.json();
   },
-  async upsertCustomer(phone, name, addShirts=0, redeem=false) {
-    const clean = phone.replace(/\D/g,"");
-    // Try to get existing
-    const res = await fetch(`${SUPA_URL}/rest/v1/customers?phone=eq.${clean}`, {
-      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-    });
-    const existing = await res.json();
-    if (existing && existing.length > 0) {
-      const c = existing[0];
-      const newTotal = c.total_shirts + addShirts;
-      return db.update("customers", c.id, {
-        name: name || c.name,
-        total_shirts: newTotal,
-        earned_rewards: Math.floor(newTotal / 10),
-        redeemed_rewards: redeem ? c.redeemed_rewards + 1 : c.redeemed_rewards,
-      });
-    } else {
-      return db.insert("customers", {
-        phone: clean, name: name || "Customer",
-        total_shirts: addShirts,
-        earned_rewards: Math.floor(addShirts / 10),
-        redeemed_rewards: 0,
-        since: new Date().toLocaleDateString(),
-      });
-    }
-  },
-  async findCustomer(phone) {
-    const clean = phone.replace(/\D/g,"");
-    const res = await fetch(`${SUPA_URL}/rest/v1/customers?phone=eq.${clean}`, {
-      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-    });
-    const data = await res.json();
-    return data && data.length > 0 ? data[0] : null;
-  }
 };
 
 // Keep localStorage only for categories (admin config, not customer data)
@@ -310,21 +285,6 @@ const store = {
 
 // ─── LOYALTY ──────────────────────────────────────────────────────────────────
 function rewardCode(phone) { return `TATB-${phone.replace(/\D/g,"").slice(-4)}-FREE`; }
-function findCustomer(customers, phone) {
-  const c = phone.replace(/\D/g,"");
-  return customers.find(x => x.phone.replace(/\D/g,"") === c) || null;
-}
-function upsertCustomer(customers, phone, name, addShirts=0, redeem=false) {
-  const c = phone.replace(/\D/g,"");
-  const ex = customers.find(x => x.phone.replace(/\D/g,"") === c);
-  if (ex) {
-    const total = (ex.total_shirts||0) + addShirts;
-    return customers.map(x => x.phone.replace(/\D/g,"")===c
-      ? {...x, name:name||x.name, total_shirts:total, earned_rewards:Math.floor(total/SHIRTS_FOR_REWARD), redeemed_rewards:redeem?(ex.redeemed_rewards||0)+1:(ex.redeemed_rewards||0)}
-      : x);
-  }
-  return [...customers, {phone:c, name:name||"Customer", total_shirts:addShirts, earned_rewards:Math.floor(addShirts/SHIRTS_FOR_REWARD), redeemed_rewards:0, since:new Date().toLocaleDateString()}];
-}
 
 // ─── COLOR UTILS ──────────────────────────────────────────────────────────────
 function isDark(hex) { const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return (r*299+g*587+b*114)/1000<128; }
@@ -549,7 +509,8 @@ export default function App() {
   const [customers, setCustomers] = useState([]);
   const [messages, setMessages]   = useState([]);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
-  const [loading, setLoading]     = useState(true);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [loading, setLoading]     = useState(false);
   const {t, show}                 = useToast();
 
   // Keep categories in localStorage (admin config)
@@ -568,56 +529,32 @@ export default function App() {
       window.history.replaceState({},document.title,window.location.pathname);
     }
   },[]);
-  useEffect(()=>{
-    Promise.all([
-      db.get("orders"),
-      db.get("customers"),
-      db.get("messages"),
-    ]).then(([o,c,m])=>{
-      setOrders(o||[]);
-      setCustomers(c||[]);
-      setMessages(m||[]);
-      setLoading(false);
-    }).catch(()=>setLoading(false));
-  },[]);
+  // Orders/customers/messages are no longer fetched in full on page load —
+  // that shipped every customer's name, phone number, and order/message
+  // history to every visitor's browser. Admin data now loads on unlock
+  // (see handleAdminUnlock below); customer-facing lookups (Track Order,
+  // Loyalty Rewards, checkout reward preview) are scoped to a single phone
+  // number via /.netlify/functions/lookup-customer.
 
-  const addOrder = useCallback(async (order) => {
-    const o = {
-      customer_name: order.customerName,
-      phone: order.phone,
-      delivery: order.delivery,
-      notes: order.notes||"",
-      using_reward: order.usingReward||false,
-      brand: order.brand||"",
-      placement: order.placement||"",
-      date: new Date().toLocaleDateString(),
-      status: "New",
-      paid: false,
-      payment_method: "Pending",
-      items: JSON.stringify(order.items||[]),
-    };
-    try {
-      const saved = await db.insert("orders", o);
-      if (saved) {
-        setOrders(prev => [{...saved, items: o.items},...prev]);
-      }
-      if (order.phone) {
-        const qty = (order.items||[]).reduce((s,i)=>s+Number(i.qty||0),0);
-        const before = await db.findCustomer(order.phone);
-        await db.upsertCustomer(order.phone, order.customerName, qty);
-        const updated = await db.findCustomer(order.phone);
-        if (updated && updated.earned_rewards > (before?.earned_rewards||0)) {
-          show(`🏆 ${order.customerName} earned a free shirt!`,"gold");
-        }
-        const freshCusts = await db.get("customers");
-        setCustomers(freshCusts||[]);
-      }
-      show("Order submitted! Tiffani will be in touch soon. 🎉");
-    } catch(err) {
-      console.error("Order save error:", err);
-      show("Something went wrong saving your order. Please try again.","err");
-    }
-  },[show]);
+  const handleAdminUnlock = async (password) => {
+    const data = await admin.unlock(password);
+    if (!data) return false;
+    setOrders(data.orders || []);
+    setCustomers(data.customers || []);
+    setMessages(data.messages || []);
+    setAdminPassword(password);
+    setAdminUnlocked(true);
+    return true;
+  };
+  const handleAdminLock = () => {
+    setAdminUnlocked(false);
+    setAdminPassword("");
+    // Drop admin data from memory once logged out.
+    setOrders([]);
+    setCustomers([]);
+    setMessages([]);
+    refreshUnread();
+  };
 
   const TABS = [
     {id:"home",    label:"🏠 Home"},
@@ -628,7 +565,12 @@ export default function App() {
     {id:"admin",   label: adminUnlocked ? "🔓 Admin" : "⚙️ Admin"},
   ];
 
-  const unread = messages.filter(m=>!m.read).length;
+  // Just a count (no message content/PII) so the nav badge works pre-unlock.
+  const [unread, setUnread] = useState(0);
+  const refreshUnread = useCallback(() => {
+    fetch("/.netlify/functions/unread-count").then(r=>r.json()).then(d=>setUnread(d.count||0)).catch(()=>{});
+  },[]);
+  useEffect(()=>{ refreshUnread(); },[refreshUnread]);
 
   return (
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"'Trebuchet MS',sans-serif"}}>
@@ -679,13 +621,13 @@ export default function App() {
           <div style={{fontSize:13,color:B.textLt}}>Connecting to the shop</div>
         </div>
       )}
-      {!loading && view==="home"    && <Welcome setView={setView} customers={customers} orders={orders} show={show}/>}
-      {!loading && view==="store"   && <Storefront cats={cats} addOrder={addOrder} customers={customers} show={show}/>}
-      {!loading && view==="status"  && <OrderStatus orders={orders} customers={customers} show={show}/>}
-      {!loading && view==="loyalty" && <LoyaltyView customers={customers} show={show}/>}
-      {!loading && view==="tracker" && <Tracker orders={orders} setOrders={setOrders} customers={customers} setCustomers={setCustomers} show={show}/> }
+      {!loading && view==="home"    && <Welcome setView={setView} show={show}/>}
+      {!loading && view==="store"   && <Storefront cats={cats} show={show}/>}
+      {!loading && view==="status"  && <OrderStatus show={show}/>}
+      {!loading && view==="loyalty" && <LoyaltyView show={show}/>}
+      {!loading && view==="tracker" && <Tracker orders={orders} setOrders={setOrders} customers={customers} setCustomers={setCustomers} adminPassword={adminPassword} show={show}/> }
       {!loading && view==="contact" && <ContactView messages={messages} setMessages={setMessages} show={show}/>}
-      {!loading && view==="admin"   && (!adminUnlocked ? <AdminLock onUnlock={()=>setAdminUnlocked(true)} show={show}/> : <Admin cats={cats} setCats={setCats} orders={orders} setOrders={setOrders} customers={customers} setCustomers={setCustomers} messages={messages} setMessages={setMessages} onLock={()=>setAdminUnlocked(false)} show={show}/>)}
+      {!loading && view==="admin"   && (!adminUnlocked ? <AdminLock onUnlock={handleAdminUnlock} show={show}/> : <Admin cats={cats} setCats={setCats} orders={orders} setOrders={setOrders} customers={customers} setCustomers={setCustomers} messages={messages} setMessages={setMessages} adminPassword={adminPassword} onLock={handleAdminLock} show={show}/>)}
 
       {/* ── FLOATING MESSENGER BUTTON ── */}
       <MessengerBubble/>
@@ -823,7 +765,7 @@ function MessengerBubble() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // WELCOME / LANDING PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
-function Welcome({setView, customers, orders, show}) {
+function Welcome({setView, show}) {
   const [phone, setPhone]   = useState("");
   const [rec, setRec]       = useState(null);
   const [looked, setLooked] = useState(false);
@@ -832,18 +774,12 @@ function Welcome({setView, customers, orders, show}) {
   const lookup = async () => {
     const clean = phone.replace(/\D/g,"");
     if(clean.length < 10){ show("Enter a valid phone number","err"); return; }
-    const found = await db.findCustomer(phone);
+    const { customer: found, orders: myOrders } = await lookupCustomer(phone);
     setRec(found);
     setLooked(true);
-    if(found) {
-      const res = await fetch(`${SUPA_URL}/rest/v1/orders?phone=eq.${clean}&order=created_at.desc&limit=1`,{
-        headers:{ apikey:SUPA_KEY, Authorization:`Bearer ${SUPA_KEY}` }
-      });
-      const myOrders = await res.json();
-      if(Array.isArray(myOrders) && myOrders.length>0) {
-        const o = myOrders[0];
-        setLastOrder({...o, items: pi(o)});
-      }
+    if(found && Array.isArray(myOrders) && myOrders.length>0) {
+      const o = myOrders[0]; // already sorted newest-first by the server
+      setLastOrder({...o, items: pi(o)});
     }
   };
 
@@ -981,7 +917,7 @@ function Welcome({setView, customers, orders, show}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ORDER STATUS LOOKUP
 // ═══════════════════════════════════════════════════════════════════════════════
-function OrderStatus({orders, customers, show}) {
+function OrderStatus({show}) {
   const [phone, setPhone]   = useState("");
   const [myOrders, setMyOrders] = useState([]);
   const [looked, setLooked] = useState(false);
@@ -990,12 +926,8 @@ function OrderStatus({orders, customers, show}) {
   const lookup = async () => {
     const clean = phone.replace(/\D/g,"");
     if(clean.length < 10){ show("Enter a valid phone number","err"); return; }
-    const res = await fetch(`${SUPA_URL}/rest/v1/orders?phone=eq.${clean}&order=created_at.desc`,{
-      headers:{ apikey:SUPA_KEY, Authorization:`Bearer ${SUPA_KEY}` }
-    });
-    const found = await res.json();
-    const cust  = await db.findCustomer(phone);
-    setMyOrders(Array.isArray(found)?found.map(o=>({...o,customer_name:o.customer_name,items:pi(o)})):[]); 
+    const { customer: cust, orders: found } = await lookupCustomer(phone);
+    setMyOrders(Array.isArray(found)?found.map(o=>({...o,customer_name:o.customer_name,items:pi(o)})):[]);
     setRec(cust);
     setLooked(true);
   };
@@ -1107,7 +1039,7 @@ function OrderStatus({orders, customers, show}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // STOREFRONT
 // ═══════════════════════════════════════════════════════════════════════════════
-function Storefront({cats, addOrder, customers, show}) {
+function Storefront({cats, show}) {
   const [step,setStep]           = useState(1);
   const [cat,setCat]             = useState(null);
   // Designs synced from Google Drive (Supabase `designs` table), grouped by category
@@ -1209,8 +1141,11 @@ function Storefront({cats, addOrder, customers, show}) {
   const cartTotal = cart.reduce((s,l)=>s+lineTotal(l),0);
   const cartQty   = cart.reduce((s,l)=>s+l.items.reduce((a,i)=>a+i.qty,0),0);
 
-  const onPhoneBlur = () => {
-    if (cust.phone.replace(/\D/g,"").length>=10) setLoyRec(findCustomer(customers,cust.phone));
+  const onPhoneBlur = async () => {
+    if (cust.phone.replace(/\D/g,"").length>=10) {
+      const { customer } = await lookupCustomer(cust.phone);
+      setLoyRec(customer);
+    }
   };
 
   const onUpload = (e) => {
@@ -1719,14 +1654,14 @@ function Storefront({cats, addOrder, customers, show}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOYALTY VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
-function LoyaltyView({customers, show}) {
+function LoyaltyView({show}) {
   const [phone,setPhone] = useState("");
   const [rec,setRec]     = useState(null);
   const [looked,setLooked] = useState(false);
 
   const lookup = async () => {
     if(phone.replace(/\D/g,"").length<10){show("Enter a valid phone number","err");return;}
-    const found = await db.findCustomer(phone);
+    const { customer: found } = await lookupCustomer(phone);
     setRec(found);
     setLooked(true);
   };
@@ -1791,7 +1726,7 @@ function LoyaltyView({customers, show}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ORDER TRACKER
 // ═══════════════════════════════════════════════════════════════════════════════
-function Tracker({orders, setOrders, customers, setCustomers, show, embedded=false}) {
+function Tracker({orders, setOrders, customers, setCustomers, adminPassword, show, embedded=false}) {
   const [openId,setOpenId]   = useState(null);
   const [status,setStatus]   = useState("All");
   const [search,setSearch]   = useState("");
@@ -1804,20 +1739,24 @@ function Tracker({orders, setOrders, customers, setCustomers, show, embedded=fal
 
   const update = async (id,ch) => {
     setOrders(prev=>prev.map(o=>o.id===id?{...o,...ch}:o)); // optimistic
-    try { await db.update("orders", id, ch); } catch(e) { console.error("Update failed:",e); }
+    try { await admin.mutate(adminPassword, "orders", "update", id, ch); } catch(e) { console.error("Update failed:",e); }
   };
   const del = async (id) => {
     setOrders(prev=>prev.filter(o=>o.id!==id)); // optimistic
     setOpenId(null);
     show("Order deleted","err");
-    try { await db.delete("orders", id); } catch(e) { console.error("Delete failed:",e); }
+    try { await admin.mutate(adminPassword, "orders", "delete", id); } catch(e) { console.error("Delete failed:",e); }
   };
   const markRedeemed = async (order) => {
     if(!order.phone) return;
-    await db.upsertCustomer(order.phone, order.customer_name||order.customerName, 0, true);
+    const result = await admin.mutate(adminPassword, "customers", "upsertCustomer", null, {
+      phone: order.phone, name: order.customer_name||order.customerName, addShirts: 0, redeem: true,
+    });
     await update(order.id, {reward_redeemed:true});
-    const freshCusts = await db.get("customers");
-    setCustomers(freshCusts||[]);
+    if (result) setCustomers(prev => {
+      const idx = prev.findIndex(c=>c.id===result.id);
+      return idx===-1 ? [...prev, result] : prev.map(c=>c.id===result.id?result:c);
+    });
     show("Reward marked as redeemed!","gold");
   };
 
@@ -1978,15 +1917,15 @@ function ContactView({messages, setMessages, show}) {
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}),
     };
-    const saved = await db.insert("messages", msg);
-    if (saved) setMessages(prev=>[saved,...prev]);
-    // Notify Tiffani by email (non-blocking)
+    // Saves the message (service key, server-side) and emails Tiffani in one call.
     try {
-      await fetch("/.netlify/functions/send-message-email", {
+      const res = await fetch("/.netlify/functions/send-message-email", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify(msg),
       });
-    } catch(e) { console.warn("Message email failed:", e.message); }
+      const data = await res.json().catch(()=>null);
+      if (data && data.saved) setMessages(prev=>[data.saved,...prev]);
+    } catch(e) { console.warn("Message send failed:", e.message); }
     setSent(true);
     show("Message sent! Tiffani will follow up soon 💬");
   };
@@ -2054,17 +1993,20 @@ function ContactView({messages, setMessages, show}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN LOCK SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
-const ADMIN_PASSWORD = "leo080693";
-
 function AdminLock({onUnlock, show}) {
   const [input, setInput]     = useState("");
   const [shake, setShake]     = useState(false);
   const [visible, setVisible] = useState(false);
+  const [checking, setChecking] = useState(false);
 
-  const attempt = () => {
-    if (input === ADMIN_PASSWORD) {
-      onUnlock();
-    } else {
+  // The password is checked server-side (netlify/functions/admin-data.js)
+  // against ADMIN_PASSWORD, not against a value shipped in this bundle.
+  const attempt = async () => {
+    if (checking) return;
+    setChecking(true);
+    const ok = await onUnlock(input);
+    setChecking(false);
+    if (!ok) {
       setShake(true);
       setInput("");
       show("Incorrect password","err");
@@ -2097,7 +2039,7 @@ function AdminLock({onUnlock, show}) {
               style={{position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", fontSize:16, color:B.textLt}}
             >{visible?"🙈":"👁️"}</button>
           </div>
-          <button onClick={attempt} style={PBTN}>Unlock Admin →</button>
+          <button onClick={attempt} disabled={checking} style={{...PBTN, opacity:checking?0.6:1}}>{checking?"Checking…":"Unlock Admin →"}</button>
         </div>
       </div>
       <style>{`
@@ -2116,7 +2058,7 @@ function AdminLock({onUnlock, show}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN
 // ═══════════════════════════════════════════════════════════════════════════════
-function Admin({cats, setCats, orders, setOrders, customers, setCustomers, messages, setMessages, onLock, show}) {
+function Admin({cats, setCats, orders, setOrders, customers, setCustomers, messages, setMessages, adminPassword, onLock, show}) {
   const [tab,setTab]         = useState("designs");
   const [openCat,setOpenCat] = useState(null);
   const [newD,setNewD]       = useState({name:"",emoji:"✨",text:"",style:"bold"});
@@ -2222,7 +2164,7 @@ function Admin({cats, setCats, orders, setOrders, customers, setCustomers, messa
 
       {/* ── ORDERS ── */}
       {tab==="orders" && (
-        <Tracker orders={orders} setOrders={setOrders} customers={customers} setCustomers={setCustomers} show={show} embedded={true}/>
+        <Tracker orders={orders} setOrders={setOrders} customers={customers} setCustomers={setCustomers} adminPassword={adminPassword} show={show} embedded={true}/>
       )}
 
       {/* ── DESIGNS ── */}
@@ -2372,7 +2314,7 @@ function Admin({cats, setCats, orders, setOrders, customers, setCustomers, messa
             ? <div style={{textAlign:"center",padding:"50px 20px",color:B.textLt}}><div style={{fontSize:42,marginBottom:8}}>📭</div><div style={{fontSize:14,fontWeight:600}}>No messages yet</div><div style={{fontSize:12,marginTop:4}}>Messages from the Help tab appear here</div></div>
             : <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {messages.map(msg=>(
-                <div key={msg.id} onClick={async ()=>{ await db.update("messages",msg.id,{read:true}); setMessages(prev=>prev.map(m=>m.id===msg.id?{...m,read:true}:m)); }} style={{background:"#fff",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 12px rgba(0,0,0,0.07)",borderLeft:`5px solid ${msg.read?B.wood:B.green}`,cursor:"pointer"}}>
+                <div key={msg.id} onClick={async ()=>{ await admin.mutate(adminPassword,"messages","update",msg.id,{read:true}); setMessages(prev=>prev.map(m=>m.id===msg.id?{...m,read:true}:m)); }} style={{background:"#fff",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 12px rgba(0,0,0,0.07)",borderLeft:`5px solid ${msg.read?B.wood:B.green}`,cursor:"pointer"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:7}}>
@@ -2389,7 +2331,7 @@ function Admin({cats, setCats, orders, setOrders, customers, setCustomers, messa
                       {msg.phone && (
                         <a href={`sms:${msg.phone}`} style={{padding:"6px 12px",borderRadius:8,background:"#2980B9",color:"#fff",fontSize:11,fontWeight:600,textDecoration:"none",fontFamily:"'Trebuchet MS',sans-serif"}}>💬 Text</a>
                       )}
-                      <button onClick={async e=>{ e.stopPropagation(); await db.delete("messages",msg.id); setMessages(prev=>prev.filter(m=>m.id!==msg.id)); }} style={{padding:"6px 10px",borderRadius:8,border:"none",background:"#FDECEA",color:"#C0392B",fontSize:11,fontWeight:600,cursor:"pointer"}}>Delete</button>
+                      <button onClick={async e=>{ e.stopPropagation(); await admin.mutate(adminPassword,"messages","delete",msg.id); setMessages(prev=>prev.filter(m=>m.id!==msg.id)); }} style={{padding:"6px 10px",borderRadius:8,border:"none",background:"#FDECEA",color:"#C0392B",fontSize:11,fontWeight:600,cursor:"pointer"}}>Delete</button>
                     </div>
                   </div>
                 </div>
@@ -2405,7 +2347,7 @@ function Admin({cats, setCats, orders, setOrders, customers, setCustomers, messa
           <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 2px 10px rgba(0,0,0,0.07)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
               <div style={{fontWeight:700,color:B.text}}>🏆 Top Designs</div>
-              <button onClick={async()=>{ const o=await db.get("orders"); setOrders(o||[]); show("Stats refreshed!"); }} style={{fontSize:11,color:B.green,background:B.greenPale,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>↻ Refresh</button>
+              <button onClick={async()=>{ const data=await admin.unlock(adminPassword); if(data) setOrders(data.orders||[]); show("Stats refreshed!"); }} style={{fontSize:11,color:B.green,background:B.greenPale,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>↻ Refresh</button>
             </div>
             {topDesigns.length===0 ? <div style={{color:B.textLt,fontSize:13}}>No orders yet</div> :
               topDesigns.map(([name,qty],i)=>(

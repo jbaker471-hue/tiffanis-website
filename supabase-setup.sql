@@ -120,3 +120,26 @@ alter table orders add column if not exists stripe_session_id text default '';
 alter table orders add column if not exists amount_paid numeric default 0;
 alter table orders add column if not exists shipping_address text default '';
 alter table orders add column if not exists email text default '';
+
+-- ── MIGRATION: Lock down orders/customers/messages ──────────────
+-- The original policies above (using (true) for select/insert/update/delete)
+-- let anyone with the public anon key read and modify every customer name,
+-- phone number, order, and message, and the app fetched all three tables in
+-- full on every page load. All reads and writes now go through Netlify
+-- functions (lookup-customer, admin-data, admin-mutate, send-message-email,
+-- stripe-webhook) using the service role key, which bypasses RLS, so the
+-- anon role needs none of its own access to these three tables anymore.
+-- Run this once to drop the old wide-open policies; it leaves RLS enabled
+-- with no anon policies, which means the anon key can no longer read or
+-- write these tables at all.
+drop policy if exists "Public can insert orders"    on orders;
+drop policy if exists "Public can read own orders"  on orders;
+drop policy if exists "Public can update orders"    on orders;
+drop policy if exists "Public can delete orders"    on orders;
+drop policy if exists "Public can insert customers" on customers;
+drop policy if exists "Public can read customers"   on customers;
+drop policy if exists "Public can update customers" on customers;
+drop policy if exists "Public can insert messages"  on messages;
+drop policy if exists "Public can read messages"    on messages;
+drop policy if exists "Public can update messages"  on messages;
+drop policy if exists "Public can delete messages"  on messages;

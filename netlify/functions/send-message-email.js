@@ -1,4 +1,8 @@
-// Sends Tiffani a quick email when someone leaves a message via the contact form
+// Saves a contact-form message (service key, bypassing RLS — the anon key
+// has no access to the messages table) and emails Tiffani a copy.
+const SUPA_URL = process.env.VITE_SUPABASE_URL;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
@@ -7,12 +11,50 @@ exports.handler = async (event) => {
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
   const NOTIFY_EMAIL  = process.env.NOTIFY_EMAIL;
 
+  let msg;
+  try {
+    msg = JSON.parse(event.body);
+  } catch {
+    return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON body" }) };
+  }
+  if (!msg.name || !msg.message) {
+    return { statusCode: 400, body: JSON.stringify({ error: "name and message are required" }) };
+  }
+
+  let saved = null;
+  try {
+    const dbRes = await fetch(`${SUPA_URL}/rest/v1/messages`, {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        name: msg.name,
+        phone: msg.phone || "",
+        message: msg.message,
+        read: false,
+        date: msg.date || new Date().toLocaleDateString(),
+        time: msg.time || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      }),
+    });
+    if (dbRes.ok) {
+      const rows = await dbRes.json();
+      saved = Array.isArray(rows) ? rows[0] : rows;
+    } else {
+      console.error("Message insert failed:", dbRes.status, await dbRes.text());
+    }
+  } catch (err) {
+    console.error("Message insert error:", err);
+  }
+
   if (!RESEND_API_KEY || !NOTIFY_EMAIL) {
-    return { statusCode: 200, body: JSON.stringify({ skipped: true }) };
+    return { statusCode: 200, body: JSON.stringify({ saved, emailed: false }) };
   }
 
   try {
-    const msg = JSON.parse(event.body);
 
     const html = `
 <!DOCTYPE html>
@@ -66,16 +108,17 @@ exports.handler = async (event) => {
       }),
     });
 
+    // The message is already saved at this point — an email hiccup shouldn't
+    // make the client think the message itself failed to send.
     if (!res.ok) {
-      const err = await res.text();
-      console.error("Resend error:", err);
-      return { statusCode: 500, body: JSON.stringify({ error: err }) };
+      console.error("Resend error:", await res.text());
+      return { statusCode: 200, body: JSON.stringify({ saved, emailed: false }) };
     }
 
-    return { statusCode: 200, body: JSON.stringify({ sent: true }) };
+    return { statusCode: 200, body: JSON.stringify({ saved, emailed: true }) };
 
   } catch (err) {
     console.error("Message email error:", err);
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return { statusCode: 200, body: JSON.stringify({ saved, emailed: false }) };
   }
 };

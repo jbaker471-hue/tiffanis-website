@@ -46,8 +46,8 @@ exports.handler = async (event) => {
         {
           method: "POST",
           headers: {
-            apikey: process.env.VITE_SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${process.env.VITE_SUPABASE_ANON_KEY}`,
+            apikey: process.env.SUPABASE_SERVICE_KEY,
+            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
             "Content-Type": "application/json",
             Prefer: "return=representation",
           },
@@ -71,8 +71,8 @@ exports.handler = async (event) => {
           `${process.env.VITE_SUPABASE_URL}/rest/v1/customers?phone=eq.${phone}`,
           {
             headers: {
-              apikey: process.env.VITE_SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${process.env.VITE_SUPABASE_ANON_KEY}`,
+              apikey: process.env.SUPABASE_SERVICE_KEY,
+              Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
             },
           }
         );
@@ -86,8 +86,8 @@ exports.handler = async (event) => {
             {
               method: "PATCH",
               headers: {
-                apikey: process.env.VITE_SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${process.env.VITE_SUPABASE_ANON_KEY}`,
+                apikey: process.env.SUPABASE_SERVICE_KEY,
+                Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
@@ -103,8 +103,8 @@ exports.handler = async (event) => {
             {
               method: "POST",
               headers: {
-                apikey: process.env.VITE_SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${process.env.VITE_SUPABASE_ANON_KEY}`,
+                apikey: process.env.SUPABASE_SERVICE_KEY,
+                Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
