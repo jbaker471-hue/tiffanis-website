@@ -3,7 +3,7 @@
 // never ships in the bundle every customer downloads, only whoever
 // actually opens the Admin tab.
 import { useState, useEffect, useRef } from "react";
-import { B, INP, PBTN, Lbl, SecHead, PAYMENT_OPTS, STATUSES, STATUS_META, SHIRTS_FOR_REWARD, admin, rewardCode, pi } from "./shared.jsx";
+import { B, INP, PBTN, Lbl, SecHead, PAYMENT_OPTS, STATUSES, STATUS_META, SHIRTS_FOR_REWARD, admin, rewardCode, pi, SHIRT_COLORS, ShirtSVG } from "./shared.jsx";
 import { availableRewards } from "./loyalty.js";
 
 export function Tracker({orders, setOrders, customers, setCustomers, adminPassword, show, embedded=false}) {
