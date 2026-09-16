@@ -43,12 +43,17 @@ Keep answers short, warm, and friendly. If you don't know something specific, en
     });
 
     if (!res.ok) {
-      const err = await res.text();
-      console.error("Claude API error:", err);
+      const errText = await res.text();
+      console.error("Claude API error:", res.status, errText);
+      // Surface the upstream status/type (not the full body) so the cause
+      // (bad key, missing model access, rate limit, ...) is visible from the
+      // browser Network tab, since Netlify's own log view isn't reliable.
+      let upstreamType;
+      try { upstreamType = JSON.parse(errText).error?.type; } catch {}
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: "API error" }),
+        body: JSON.stringify({ error: "API error", upstreamStatus: res.status, upstreamType }),
       };
     }
 

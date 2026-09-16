@@ -1536,7 +1536,7 @@ function ContactView({messages, setMessages, show}) {
         body:JSON.stringify({ messages: apiMessages })
       });
       const data = await res.json();
-      if (!res.ok || !data.reply) console.error("Help chat failed:", res.status, data.error || data);
+      if (!res.ok || !data.reply) console.error("Help chat failed:", res.status, data);
       const reply = data.reply || "Sorry, I had trouble with that! Please message Tiffani directly on Messenger. 💬";
       setChatLog(h=>[...h,{role:"bot",text:reply}]);
     } catch(e) {
