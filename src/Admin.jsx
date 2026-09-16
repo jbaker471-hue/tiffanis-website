@@ -255,6 +255,11 @@ export function Admin({cats, setCats, orders, setOrders, customers, setCustomers
         })
       });
       const data = await res.json();
+      if (!res.ok) {
+        const msg = data.error?.message || `API error (${res.status})`;
+        setAiQueue(prev=>prev.map(q=>q.id===item.id?{...q,status:"error",reason:msg}:q));
+        return;
+      }
       const raw = data.content?.find(b=>b.type==="text")?.text||"{}";
       let p; try { p=JSON.parse(raw.replace(/```json|```/g,"").trim()); } catch { p={suggestedCategory:cats[0]?.name,designName:item.name,confidence:"low",tags:[],reason:"Parse error"}; }
       setAiQueue(prev=>prev.map(q=>q.id===item.id?{...q,status:"done",suggestion:p.suggestedCategory||cats[0]?.name,assignedCat:p.suggestedCategory||cats[0]?.name,designName:p.designName||item.name,confidence:p.confidence,tags:p.tags||[],reason:p.reason||""}:q));
@@ -292,6 +297,18 @@ export function Admin({cats, setCats, orders, setOrders, customers, setCustomers
   const unread = messages.filter(m=>!m.read).length;
   const topDesigns = Object.entries(orders.flatMap(o=>pi(o)).filter(i=>i.design).reduce((a,i)=>{a[i.design]=(a[i.design]||0)+Number(i.qty||1);return a;},{})).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const confColor = c=>c==="high"?"#27AE60":c==="medium"?"#E67E22":"#C0392B";
+
+  // ── Revenue & status stats ──
+  const now = new Date();
+  const paidOrders = orders.filter(o=>o.paid);
+  const inMonth = (o,d=now) => { const t=new Date(o.created_at); return !isNaN(t) && t.getFullYear()===d.getFullYear() && t.getMonth()===d.getMonth(); };
+  const inWeek = (o) => { const t=new Date(o.created_at); if(isNaN(t)) return false; const days=(now-t)/86400000; return days>=0 && days<7; };
+  const totalRevenue  = paidOrders.reduce((s,o)=>s+(Number(o.amount_paid)||0),0);
+  const monthRevenue  = paidOrders.filter(o=>inMonth(o)).reduce((s,o)=>s+(Number(o.amount_paid)||0),0);
+  const weekRevenue   = paidOrders.filter(inWeek).reduce((s,o)=>s+(Number(o.amount_paid)||0),0);
+  const avgOrderValue = paidOrders.length ? totalRevenue/paidOrders.length : 0;
+  const unpaidTotal   = orders.filter(o=>!o.paid).reduce((s,o)=>s+(Number(o.amount_paid)||0),0);
+  const statusCounts  = STATUSES.map(s=>({status:s, count:orders.filter(o=>o.status===s).length, meta:STATUS_META[s]}));
 
   const ADMIN_TABS = [{id:"orders",l:"📋 Orders"},{id:"designs",l:"🎨 Designs"},{id:"ai",l:"🤖 AI Sort"},{id:"loyalty",l:"⭐ Loyalty"},{id:"messages",l:`📩 Messages${unread>0?` (${unread})`:""}`},{id:"stats",l:"📊 Stats"}];
 
@@ -493,6 +510,44 @@ export function Admin({cats, setCats, orders, setOrders, customers, setCustomers
       {/* ── STATS ── */}
       {tab==="stats" && (
         <div style={{display:"grid",gap:14}}>
+          <div style={{background:`linear-gradient(135deg,${B.greenDk},${B.green})`,borderRadius:16,padding:"16px 18px",color:"#fff"}}>
+            <div style={{fontSize:15,fontWeight:700,marginBottom:10}}>💰 Revenue</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:18}}>
+              {[
+                {l:"Total",v:totalRevenue},
+                {l:"This Month",v:monthRevenue},
+                {l:"This Week",v:weekRevenue},
+                {l:"Avg Order",v:avgOrderValue},
+              ].map(s=>(
+                <div key={s.l} style={{textAlign:"center"}}>
+                  <div style={{fontSize:22,fontWeight:700,color:"#FFD700"}}>${s.v.toFixed(2)}</div>
+                  <div style={{fontSize:11,opacity:.75}}>{s.l}</div>
+                </div>
+              ))}
+              {unpaidTotal>0 && (
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:22,fontWeight:700,color:"#FFB0A0"}}>${unpaidTotal.toFixed(2)}</div>
+                  <div style={{fontSize:11,opacity:.75}}>Unpaid</div>
+                </div>
+              )}
+            </div>
+          </div>
+          <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 2px 10px rgba(0,0,0,0.07)"}}>
+            <div style={{fontWeight:700,color:B.text,marginBottom:12}}>📊 Orders by Status</div>
+            {orders.length===0 ? <div style={{color:B.textLt,fontSize:13}}>No orders yet</div> :
+              statusCounts.map(({status,count,meta})=>(
+                <div key={status} style={{marginBottom:9}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:B.textMid,marginBottom:3}}>
+                    <span>{status}</span>
+                    <span style={{fontWeight:700,color:meta.color}}>{count}</span>
+                  </div>
+                  <div style={{background:B.creamDk,borderRadius:20,height:7}}>
+                    <div style={{height:"100%",borderRadius:20,background:meta.dot,width:`${orders.length?(count/orders.length)*100:0}%`,transition:"width .3s ease"}}/>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
           <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 2px 10px rgba(0,0,0,0.07)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
               <div style={{fontWeight:700,color:B.text}}>🏆 Top Designs</div>
