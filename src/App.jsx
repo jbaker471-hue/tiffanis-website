@@ -358,7 +358,6 @@ function LoyaltyBar({rec}) {
 // ─── SHARED UI ────────────────────────────────────────────────────────────────
 // INP/PBTN/Lbl now live in shared.jsx (also used by the lazy-loaded Admin.jsx)
 const BBTN = {background:"none",border:"none",color:B.green,cursor:"pointer",fontSize:14,fontWeight:600,padding:"0 0 14px 0",display:"block",fontFamily:"'Trebuchet MS',sans-serif"};
-function SecHead({children}) { return <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:B.amber,fontFamily:"'Trebuchet MS',sans-serif",fontWeight:700,marginBottom:10}}>{children}</div>; }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN APP
@@ -1187,16 +1186,16 @@ function Storefront({cats, show}) {
         <div style={{animation:"fup .4s ease"}}>
           <button onClick={()=>setStep(2)} style={BBTN}>← Back</button>
           <h2 style={{fontSize:24,color:B.text,marginBottom:18,fontFamily:"'Dancing Script','Georgia',cursive"}}>Customize Your Shirt</h2>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,alignItems:"start"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:24,alignItems:"start"}}>
             {/* Preview */}
-            <div style={{background:"#fff",borderRadius:20,padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.08)",textAlign:"center",position:"sticky",top:80}}>
+            <div style={{background:"#fff",borderRadius:20,padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.08)",textAlign:"center",position:"sticky",top:80,minWidth:0}}>
               <div style={{fontSize:10,color:B.textLt,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Live Preview</div>
               <ShirtSVG color={color} design={design} uploadImg={uploadImg || design?.thumb_url || design?.image_url} productId={productId} size={260}/>
               <div style={{marginTop:8,fontSize:12,color:B.textLt}}>{color.name} · {design.name}</div>
               <div style={{marginTop:4,fontSize:10,color:B.textLt,opacity:0.7}}>build v1.4 · style: {productId}</div>
             </div>
             {/* Controls */}
-            <div>
+            <div style={{minWidth:0}}>
               {/* Print File — available for all designs */}
               <div style={{marginBottom:20}}>
                 <Lbl>

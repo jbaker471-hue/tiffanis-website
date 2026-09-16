@@ -66,3 +66,4 @@ export const INP = (extra={}) => ({width:"100%",padding:"10px 12px",borderRadius
 export const PBTN = {background:`linear-gradient(135deg,${B.greenDk},${B.green})`,color:"#fff",border:"none",borderRadius:12,padding:"12px 24px",cursor:"pointer",fontFamily:"'Trebuchet MS',sans-serif",fontWeight:700,fontSize:14,boxShadow:`0 4px 14px rgba(74,124,89,0.3)`,width:"100%"};
 
 export function Lbl({children}) { return <div style={{fontSize:12,color:B.textLt,marginBottom:5,fontFamily:"'Trebuchet MS',sans-serif"}}>{children}</div>; }
+export function SecHead({children}) { return <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:B.amber,fontFamily:"'Trebuchet MS',sans-serif",fontWeight:700,marginBottom:10}}>{children}</div>; }

@@ -66,6 +66,7 @@ exports.handler = async (event) => {
       if (meta.phone) {
         const qty = items.reduce((s, i) => s + Number(i.qty || 1), 0);
         const phone = meta.phone.replace(/\D/g, "");
+        const rewardWasApplied = meta.using_reward === "true" && Number(meta.reward_discount || 0) > 0;
 
         // Check existing customer
         const custRes = await fetch(
@@ -95,6 +96,7 @@ exports.handler = async (event) => {
                 total_shirts: newTotal,
                 earned_rewards: Math.floor(newTotal / 10),
                 name: meta.customer_name || c.name,
+                ...(rewardWasApplied ? { redeemed_rewards: (c.redeemed_rewards || 0) + 1 } : {}),
               }),
             }
           );
@@ -113,7 +115,7 @@ exports.handler = async (event) => {
                 name: meta.customer_name || "Customer",
                 total_shirts: qty,
                 earned_rewards: Math.floor(qty / 10),
-                redeemed_rewards: 0,
+                redeemed_rewards: rewardWasApplied ? 1 : 0,
                 since: new Date().toLocaleDateString(),
               }),
             }
